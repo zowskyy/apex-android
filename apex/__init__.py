@@ -24,6 +24,11 @@ try:
 except Exception:
     Template = None
 
+try:
+    import apex_zip_reader as _native_zip
+except Exception:
+    _native_zip = None
+
 
 ENTRY_POINT_HINTS = ("MainActivity", "Application", "Service", "Receiver", "Provider")
 
@@ -36,12 +41,72 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
-def extract_apk(apk_path: Path, work_dir: Path) -> Path:
+_ZIP_TRAVERSAL_MAX_NAME_LEN = 4096
+
+
+def _fallback_sanitized_name(raw_name: str) -> str | None:
+    """Pure-Python mirror of core/zip_reader/src/sanitize.rs::check_name.
+
+    Only used when the apex_zip_reader native extension isn't installed —
+    keeps extract_apk() safe against CVE-2026-39973-style traversal even
+    without the compiled Rust module. Returns None if the entry must be
+    refused outright.
+    """
+    if not raw_name or len(raw_name) > _ZIP_TRAVERSAL_MAX_NAME_LEN or "\0" in raw_name:
+        return None
+    normalized = raw_name.replace("\\", "/")
+    if normalized.startswith("/"):
+        return None
+    if len(normalized) >= 2 and normalized[1] == ":" and normalized[0].isalpha():
+        return None
+    parts = [p for p in normalized.split("/") if p not in ("", ".")]
+    if any(p == ".." for p in parts) or not parts:
+        return None
+    return "/".join(parts)
+
+
+def _fallback_extract_apk(apk_path: Path, extract_dir: Path) -> dict[str, Any]:
+    extracted = 0
+    warned = 0
+    entries: list[dict[str, Any]] = []
+    with zipfile.ZipFile(apk_path, "r") as zf:
+        for info in zf.infolist():
+            safe_name = _fallback_sanitized_name(info.filename)
+            if safe_name is None:
+                warned += 1
+                entries.append({"name": info.filename, "verdict": "WARN", "reason": "path-traversal/absolute/oversized name"})
+                continue
+            dest = (extract_dir / safe_name).resolve()
+            if not str(dest).startswith(str(extract_dir.resolve())):
+                warned += 1
+                entries.append({"name": info.filename, "verdict": "WARN", "reason": "resolved path escapes destination root"})
+                continue
+            if info.is_dir():
+                dest.mkdir(parents=True, exist_ok=True)
+            else:
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                with zf.open(info) as src, dest.open("wb") as out:
+                    shutil.copyfileobj(src, out)
+            extracted += 1
+            entries.append({"name": info.filename, "verdict": "CLEAN"})
+    return {"total_entries": len(entries), "extracted": extracted, "warned": warned, "entries": entries, "backend": "python-fallback"}
+
+
+def extract_apk(apk_path: Path, work_dir: Path) -> tuple[Path, dict[str, Any]]:
+    """Extract an APK/ZIP with path-traversal sanitization on every entry.
+
+    Returns (extract_dir, security_report). WARN entries in the report were
+    refused, not extracted — callers should surface them, not silently drop them.
+    """
     extract_dir = work_dir / "extracted"
     extract_dir.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(apk_path, "r") as zf:
-        zf.extractall(extract_dir)
-    return extract_dir
+    if _native_zip is not None:
+        report = _native_zip.extract_apk(str(apk_path), str(extract_dir))
+        report = dict(report)
+        report["backend"] = "rust"
+    else:
+        report = _fallback_extract_apk(apk_path, extract_dir)
+    return extract_dir, report
 
 
 def inventory_files(root: Path) -> list[str]:
@@ -325,7 +390,7 @@ def analyze(apk_path: Path, out_dir: Path, keep_abi: list[str] | None = None, st
         "size_bytes": apk_path.stat().st_size,
     }
 
-    extract_dir = extract_apk(apk_path, work_dir)
+    extract_dir, zip_security = extract_apk(apk_path, work_dir)
     resources = scan_resources(extract_dir)
     native = scan_native_libs(extract_dir, keep_abi)
     dex = scan_dex_metadata(extract_dir)
@@ -335,6 +400,15 @@ def analyze(apk_path: Path, out_dir: Path, keep_abi: list[str] | None = None, st
 
     report = {
         "meta": meta,
+        "security": {
+            "zip_extraction": {
+                "backend": zip_security.get("backend"),
+                "total_entries": zip_security.get("total_entries"),
+                "extracted": zip_security.get("extracted"),
+                "warned": zip_security.get("warned"),
+                "warnings": [e for e in zip_security.get("entries", []) if e.get("verdict") == "WARN"],
+            }
+        },
         "resources": resources,
         "native": native,
         "dex": dex,
