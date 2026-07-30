@@ -21,8 +21,40 @@
   or for installing on a real device/emulator to debug. See
   `tools/mobile_test_app/README.md`.
 
+- 1.5 (partial — structural parsing only, no bytecode decode yet) —
+  `core/dex_parser` (rlib `apex_dex_parser`, not yet PyO3-bridged): DEX
+  header (all 23 fields, correct offsets), string pool (MUTF-8 decode),
+  type_ids, class_defs (all 8 fields), and class_data_item (ULEB128,
+  delta-encoded field/method indices). Verified against 4 integration tests
+  reading a real `classes.dex` compiled by the actual Android `d8` tool
+  (`core/dex_parser/tests/fixtures/`, provenance in that dir's README) —
+  correctly resolves all 7 real classes (3 hand-written + 4 R.java holder
+  classes `d8` generated) and walks class_data → method_idx → method_ids
+  table → string pool to find `onCreate` by name.
+  **Provenance**: this is a from-scratch rewrite, architecturally modeled
+  on a separate personal project (`dex-hybrid`, not third-party — no
+  license/attribution concern), after a review found 3 concrete format
+  bugs in that project's parser (verified against
+  source.android.com/docs/core/runtime/dex-format): header read only 4 of
+  23 fields and mislabeled byte 0x2C as map_off (real map_off is 0x34);
+  class_def_item was missing `static_values_off` (7 of 8 real fields),
+  which would misalign every class after the first; class_data_item was
+  read as fixed-width u32 fields instead of ULEB128 with delta-encoded
+  indices. All three fixed here. Deliberately NOT ported: that project's
+  instruction disassembler (covered ~2 of ~30 real Dalvik instruction
+  formats), its "SSA" builder (predecessor tracking was never wired up, so
+  phi-node insertion was dead code), and its optimizer/AST/pretty-printer
+  (every stage was a stub that discarded its input) — those aren't real
+  implementations to cannibalize, they're scaffolding for the real Slice
+  1.5–1.7 work still ahead (actual Dalvik instruction decode, real CFG/SSA,
+  IR → Java emitter).
+
 ## Next Slice
-1.2 — Rust resources.arsc parser (streaming, bounded allocation)
+1.5 (continued) — real Dalvik instruction decoding (the ~30 instruction
+formats: 10x/12x/11n/11x/21c/22c/35c/3rc/etc.), building on the class_data
+method table now in place. Then 1.2 (resources.arsc) and 1.3 (binary XML)
+remain open in parallel — order between them is free, 1.5 was pulled
+forward opportunistically because of the dex-hybrid review.
 
 ## Blockers
 - None.
@@ -63,6 +95,20 @@
   baseline. It is a reasonable stand-in for structure/entry-count-shaped
   testing but is not a substitute for the real corpus for round-trip or
   framework-compatibility slices (2.x) — those need the actual APKs.
+
+## Pending Decision: Kotlin / R8-obfuscation support
+Not yet integrated, but scoped: `android-reverse-engineering-skill`
+(github.com/SimoneAvogadro/android-reverse-engineering-skill, Apache-2.0)
+is confirmed as a legally-reusable reference/stopgap for exactly the
+Kotlin-metadata-recovery + Ktor/Apollo/Koin API-extraction capability
+discussed for APEX. Its `recover-kotlin-names.sh` technique (mine
+`@DebugMetadata`/`@Metadata` d2 strings that R8 can't strip) is sound and
+directly portable. Plan: wrap it as an interim jadx-based stopgap (per the
+Risk Register's own "wrap jadx-core initially, replace incrementally"),
+then move the technique into `core/dex_parser`'s own annotation-parsing
+once that exists (annotations_off is already captured per class_def, just
+not parsed yet). If reused, must keep its LICENSE/attribution per
+Apache-2.0 terms — not yet done since nothing's been copied in yet.
 
 ## Key Decisions
 - Tool name: APEX (Android Package EXaminer)

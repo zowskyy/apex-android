@@ -1,0 +1,12 @@
+[package]
+name = "apex_dex_parser"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "apex_dex_parser"
+crate-type = ["rlib"]
+
+[dependencies]
+thiserror = "2.0.19"
