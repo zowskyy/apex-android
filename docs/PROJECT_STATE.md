@@ -60,20 +60,40 @@
   ported: that project's "SSA" builder (predecessor tracking was never
   wired up, so phi-node insertion was dead code) and its optimizer/AST/
   pretty-printer (every stage was a stub that discarded its input) — those
-  remain scaffolding for the real Slice 1.6–1.7 work still ahead (CFG/SSA
-  construction from the now-real instruction stream, IR → Java emitter).
+  remain scaffolding for the real Slice 1.7 work still ahead (IR → Java
+  emitter, now that both instructions and CFG are real).
   **Known gap in the opcode table**: the 0xe3-0xf9 quickened/ODEX-only
   range (iget-quick/invoke-virtual-quick/etc.) has width-correct but
   semantically-approximate format assignments — those opcodes never appear
   in build-time/APK-shipped DEX (only in on-device ART-optimized ODEX), so
   this hasn't mattered yet and isn't tested against real bytecode; treat it
   as unverified if `core/dex_parser` is ever pointed at a non-APK DEX source.
+- 1.6 (CFG only — SSA/phi construction still open) — `core/dex_parser::cfg`:
+  standard 3-rule leader-based basic-block splitting (first instruction,
+  branch targets, instruction-after-a-branch) with correctly-computed
+  successors AND predecessors — the direct fix for the exact bug found in
+  dex-hybrid's `ir.rs`, where `BasicBlock.predecessors` was declared but
+  nothing ever pushed to it, so its phi-node insertion loop iterated an
+  always-empty list and never ran. Handles the DEX-specific wrinkle that
+  packed-switch/sparse-switch's `branch_offset` points to a *payload* data
+  block, not a code target — real jump targets live inside the payload's
+  `targets` list, each relative to the *switch instruction's* offset, not
+  the payload's; resolving that indirection correctly is what makes switch
+  statements produce any successor edges at all.
+  Verified: 4 unit tests using hand-built synthetic instruction sequences
+  (the real fixture's methods are all straight-line, so branches/loops/
+  switches can't be exercised against real bytecode) — an if/else diamond
+  where the join block ends up with exactly 2 predecessors (the property
+  dex-hybrid never achieved), a self-looping block, straight-line code
+  producing exactly one block with no edges, and the switch-payload target
+  resolution in isolation — plus 1 real-DEX test confirming `onCreate`
+  (no branches) produces a single block with no edges. Clippy clean. Whole
+  workspace: 20 Rust tests passing.
 
 ## Next Slice
-1.6 — CFG/basic-block construction and real SSA form from the instruction
-stream `core/dex_parser::code` now produces (branch_offset/index are
-already resolved per-instruction, so this is graph-building, not more
-format parsing). Then 1.2 (resources.arsc) and 1.3 (binary XML) remain
+1.6 (continued) — real SSA form (phi-node insertion at join blocks, using
+the now-correct predecessor lists) and def-use tracking, building directly
+on the CFG above. Then 1.2 (resources.arsc) and 1.3 (binary XML) remain
 open in parallel — order between them is free, 1.5 was pulled forward
 opportunistically because of the dex-hybrid review.
 

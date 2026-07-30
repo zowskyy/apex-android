@@ -169,6 +169,34 @@ fn oncreate_decodes_to_expected_real_bytecode_shape() {
 }
 
 #[test]
+fn oncreate_cfg_is_single_straight_line_block() {
+    // onCreate has no branches (see oncreate_decodes_to_expected_real_bytecode_shape),
+    // so its CFG must be exactly one block with no successors/predecessors -
+    // a regression guard against the CFG builder over-splitting when there's
+    // no real leader to justify it.
+    let dex = apex_dex_parser::parse(CLASSES_DEX).expect("parse");
+    let main_activity = dex
+        .class_defs
+        .iter()
+        .find(|def| dex.type_name(def.class_idx) == Some("Lcom/apex/testapp/MainActivity;"))
+        .expect("MainActivity present");
+    let data = dex.class_data(main_activity).expect("class_data");
+    let on_create = data
+        .virtual_methods
+        .iter()
+        .find(|m| dex.method_name(m.method_idx).unwrap_or("") == "onCreate")
+        .expect("onCreate present");
+
+    let (_item, units) = dex.decode_method(on_create.code_off).expect("decode");
+    let cfg = apex_dex_parser::cfg::build_cfg(&units);
+
+    assert_eq!(cfg.blocks.len(), 1);
+    assert!(cfg.blocks[0].successors.is_empty());
+    assert!(cfg.blocks[0].predecessors.is_empty());
+    assert_eq!(cfg.blocks[0].instructions.len(), 4);
+}
+
+#[test]
 fn every_class_data_offset_parses_without_desync() {
     // Regression guard for the exact bug found in dex-hybrid: if class_def
     // parsing desyncs (e.g. from a missing struct field), class_data_off
