@@ -26,8 +26,10 @@
 
 pub mod class_data;
 pub mod class_def;
+pub mod code;
 pub mod error;
 pub mod header;
+pub mod opcode;
 pub mod reader;
 pub mod strings;
 
@@ -70,5 +72,23 @@ impl<'a> DexFile<'a> {
     pub fn class_data(&self, def: &class_def::ClassDef) -> Result<class_data::ClassData> {
         let r = DexReader::new(self.data);
         class_data::parse_class_data(&r, def.class_data_off)
+    }
+
+    /// Resolve a method_ids table entry's name string, given a method_idx.
+    /// method_id_item is a fixed 8-byte record: class_idx:u16, proto_idx:u16, name_idx:u32.
+    pub fn method_name(&self, method_idx: u32) -> Result<&str> {
+        let r = DexReader::new(self.data);
+        let entry = self.header.method_ids_off as usize + (method_idx as usize) * 8;
+        let name_idx = r.u32_at(entry + 4)?;
+        Ok(self.strings.get(name_idx as usize).map(|s| s.as_str()).unwrap_or(""))
+    }
+
+    /// Parse a method's code_item (from `EncodedMethod::code_off`, 0 means
+    /// abstract/native — no code) and decode its instruction stream.
+    pub fn decode_method(&self, code_off: u32) -> Result<(code::CodeItem, Vec<code::CodeUnit>)> {
+        let r = DexReader::new(self.data);
+        let item = code::parse_code_item(&r, code_off)?;
+        let units = code::decode_instructions(&item.insns)?;
+        Ok((item, units))
     }
 }

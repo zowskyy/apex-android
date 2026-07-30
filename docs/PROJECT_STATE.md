@@ -21,16 +21,30 @@
   or for installing on a real device/emulator to debug. See
   `tools/mobile_test_app/README.md`.
 
-- 1.5 (partial — structural parsing only, no bytecode decode yet) —
+- 1.5 (structural parsing + real instruction decoding; IR/CFG still open) —
   `core/dex_parser` (rlib `apex_dex_parser`, not yet PyO3-bridged): DEX
   header (all 23 fields, correct offsets), string pool (MUTF-8 decode),
-  type_ids, class_defs (all 8 fields), and class_data_item (ULEB128,
-  delta-encoded field/method indices). Verified against 4 integration tests
-  reading a real `classes.dex` compiled by the actual Android `d8` tool
-  (`core/dex_parser/tests/fixtures/`, provenance in that dir's README) —
-  correctly resolves all 7 real classes (3 hand-written + 4 R.java holder
-  classes `d8` generated) and walks class_data → method_idx → method_ids
-  table → string pool to find `onCreate` by name.
+  type_ids, class_defs (all 8 fields), class_data_item (ULEB128,
+  delta-encoded field/method indices), code_item parsing, and a real
+  per-format Dalvik instruction decoder (`opcode.rs` + `code.rs`): all ~28
+  instruction formats (10x through 51l) with correct bit layouts, the full
+  opcode→format table (0x00-0xff, including the quickened/ODEX-only tail
+  and invoke-polymorphic/invoke-custom/const-method-handle at the high end),
+  and the 3 inline switch/array-data payload pseudo-instructions
+  (packed-switch, sparse-switch, fill-array-data), which are NOT part of
+  the normal opcode space and must be detected via their nop-family marker
+  bytes or every instruction after one desyncs.
+  Verified against 6 integration tests reading a real `classes.dex`
+  compiled by the actual Android `d8` tool (`core/dex_parser/tests/`,
+  provenance in `tests/fixtures/README.md`): resolves all 7 real classes,
+  walks class_data → method_idx → method_ids → string pool to find methods
+  by name, and — the strongest check — for every real method with code,
+  decoded instruction widths sum exactly to the method's declared
+  `insns_size` (this is the property that would break immediately if any
+  opcode's format/width were wrong). `onCreate` decodes to exactly its real
+  source shape: `invoke-super` → `const/high16` (asserted to carry a
+  `0x7f` AAPT app-resource-ID prefix in its top 32 bits) → `invoke-virtual`
+  → `return-void`, matching `super.onCreate(...); setContentView(R.layout...)`.
   **Provenance**: this is a from-scratch rewrite, architecturally modeled
   on a separate personal project (`dex-hybrid`, not third-party — no
   license/attribution concern), after a review found 3 concrete format
@@ -40,21 +54,28 @@
   class_def_item was missing `static_values_off` (7 of 8 real fields),
   which would misalign every class after the first; class_data_item was
   read as fixed-width u32 fields instead of ULEB128 with delta-encoded
-  indices. All three fixed here. Deliberately NOT ported: that project's
-  instruction disassembler (covered ~2 of ~30 real Dalvik instruction
-  formats), its "SSA" builder (predecessor tracking was never wired up, so
-  phi-node insertion was dead code), and its optimizer/AST/pretty-printer
-  (every stage was a stub that discarded its input) — those aren't real
-  implementations to cannibalize, they're scaffolding for the real Slice
-  1.5–1.7 work still ahead (actual Dalvik instruction decode, real CFG/SSA,
-  IR → Java emitter).
+  indices. All three fixed here, plus the instruction decoder (below) was
+  built from scratch rather than salvaging that project's disassembler,
+  which only covered ~2 of ~30 real Dalvik instruction formats. Also NOT
+  ported: that project's "SSA" builder (predecessor tracking was never
+  wired up, so phi-node insertion was dead code) and its optimizer/AST/
+  pretty-printer (every stage was a stub that discarded its input) — those
+  remain scaffolding for the real Slice 1.6–1.7 work still ahead (CFG/SSA
+  construction from the now-real instruction stream, IR → Java emitter).
+  **Known gap in the opcode table**: the 0xe3-0xf9 quickened/ODEX-only
+  range (iget-quick/invoke-virtual-quick/etc.) has width-correct but
+  semantically-approximate format assignments — those opcodes never appear
+  in build-time/APK-shipped DEX (only in on-device ART-optimized ODEX), so
+  this hasn't mattered yet and isn't tested against real bytecode; treat it
+  as unverified if `core/dex_parser` is ever pointed at a non-APK DEX source.
 
 ## Next Slice
-1.5 (continued) — real Dalvik instruction decoding (the ~30 instruction
-formats: 10x/12x/11n/11x/21c/22c/35c/3rc/etc.), building on the class_data
-method table now in place. Then 1.2 (resources.arsc) and 1.3 (binary XML)
-remain open in parallel — order between them is free, 1.5 was pulled
-forward opportunistically because of the dex-hybrid review.
+1.6 — CFG/basic-block construction and real SSA form from the instruction
+stream `core/dex_parser::code` now produces (branch_offset/index are
+already resolved per-instruction, so this is graph-building, not more
+format parsing). Then 1.2 (resources.arsc) and 1.3 (binary XML) remain
+open in parallel — order between them is free, 1.5 was pulled forward
+opportunistically because of the dex-hybrid review.
 
 ## Blockers
 - None.
