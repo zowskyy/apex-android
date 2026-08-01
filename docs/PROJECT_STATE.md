@@ -89,13 +89,75 @@
   resolution in isolation — plus 1 real-DEX test confirming `onCreate`
   (no branches) produces a single block with no edges. Clippy clean. Whole
   workspace: 20 Rust tests passing.
+- 1.6 (complete) — real SSA form + def-use tracking, three new modules:
+  - `core/dex_parser::defuse` — per-instruction register def/use extraction.
+    One exhaustive match over the opcode byte (mirrors opcode.rs's
+    `format_of` layout so it can be audited directly against the Dalvik
+    reference table), correctly distinguishing which operand position is
+    def vs. use *and* whether it's a single register or the low half of a
+    64-bit pair (e.g. `add-long/2addr vA, vB` defines+uses the pair at vA
+    and uses the pair at vB; `iput-wide vA, vB, field` uses the pair at vA
+    but only the single register vB, since the object ref is never wide).
+    Field/array/static accesses report only the vreg operands actually
+    read/written — `iput` uses 2 registers but defines none (the def lands
+    in a field, not a vreg). The quickened/ODEX-only range (0xe3-0xf9) is
+    conservatively use-only, consistent with opcode.rs already flagging
+    that range as unverified against real bytecode. 14 unit tests covering
+    move/wide, 2addr binops (narrow and wide, including the shift-amount-
+    stays-narrow case for shl/shr/ushr-long), iget/iput/aget/aput (wide and
+    narrow), invoke, move-result-wide, check-cast, and the quickened
+    fallback.
+  - `core/dex_parser::dominators` — immediate dominators (Cooper/Harvey/
+    Kennedy iterative algorithm) and dominance frontiers (Cytron et al.),
+    over a real reverse-postorder DFS from the entry block (block ids are
+    assigned in code-offset order, which is *not* the same as RPO once a
+    forward branch skips a block, so RPO is computed explicitly rather than
+    assumed). Found and fixed one real gap while testing against a
+    self-looping entry block: the textbook Cytron algorithm implicitly
+    assumes the entry block has an "outside" (caller) predecessor it never
+    represents as a graph edge, so when entry's *only* real predecessor is
+    itself (a single-block infinite loop, e.g. `while(true) { x++; }`
+    compiled with no separate preheader/body blocks), the standard
+    predecessors>=2 gate and the idom-walk both independently skip it,
+    silently omitting entry from its own dominance frontier even though a
+    register redefined every iteration and read at the top genuinely needs
+    a phi there. Fixed with a targeted special case (see the code comment
+    at the fix site); every other self-loop shape (one with a real,
+    non-self predecessor too, e.g. a proper preheader+header) already
+    handled this correctly via the general algorithm before the fix. 3 unit
+    tests: the if/else diamond's dominance frontier, the self-loop-frontier
+    case above, and straight-line triviality.
+  - `core/dex_parser::ssa` — minimal-SSA construction: phi placement via
+    iterated dominance frontier per register (Cytron et al.), then a
+    dominator-tree-order renaming pass (explicit-stack DFS, not recursive,
+    so adversarial/deeply-nested CFGs can't blow the stack) that assigns a
+    fresh version to every def and resolves every use to its reaching
+    definition, recording full def-use chains (`uses_of: SsaValue -> Vec<
+    UseSite>`, covering both ordinary-instruction uses and phi-operand
+    uses). Version 0 is the convention for "value live on entry" (parameter
+    or genuinely-undefined read — this layer doesn't have `ins_size` to
+    tell those apart, and doesn't need to for def-use purposes). Blocks
+    unreachable from the entry (dead code) are still converted to output
+    but renamed in isolation, with no phis and no cross-block merging,
+    since there's no dominance relationship to justify one. 5 unit tests:
+    the if/else diamond (a join-block phi with 2 distinct operand
+    versions, one per branch), straight-line code (must reference the most
+    *recent* def, not just some def), an undefined read resolving to
+    version 0, a real 2-block loop header merging its preheader and
+    back-edge defs via a phi, and the single-block self-loop case that
+    exercised the dominators.rs fix above end-to-end (phi's back-edge
+    operand must equal the loop body's own def of the carried register,
+    confirming the value is genuinely loop-carried, not just structurally
+    present). Clippy clean (`-D warnings`). Whole workspace: 42 Rust tests
+    passing (20 prior + 14 defuse + 3 dominators + 5 ssa).
 
 ## Next Slice
-1.6 (continued) — real SSA form (phi-node insertion at join blocks, using
-the now-correct predecessor lists) and def-use tracking, building directly
-on the CFG above. Then 1.2 (resources.arsc) and 1.3 (binary XML) remain
-open in parallel — order between them is free, 1.5 was pulled forward
-opportunistically because of the dex-hybrid review.
+1.2 (resources.arsc) and 1.3 (binary XML) remain open, order between them
+free — 1.5/1.6 were pulled forward opportunistically because of the
+dex-hybrid review, and are now both complete through real SSA. A natural
+next step once 1.2/1.3 land: wire `ssa::build_ssa` output into an actual
+IR->Java emitter (the still-open "Slice 1.7" mentioned in the 1.5 note
+above), since instructions/CFG/def-use/SSA are now all real.
 
 ## Blockers
 - None.
