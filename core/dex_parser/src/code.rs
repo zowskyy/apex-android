@@ -11,6 +11,7 @@
 use crate::error::{DexError, Result};
 use crate::opcode::{format_of, Format};
 use crate::reader::DexReader;
+use crate::tries::{parse_try_catch_info, EncodedCatchHandler, TryItem};
 
 #[derive(Debug, Clone)]
 pub struct CodeItem {
@@ -20,6 +21,8 @@ pub struct CodeItem {
     pub tries_size: u16,
     pub debug_info_off: u32,
     pub insns: Vec<u16>,
+    pub tries: Vec<TryItem>,
+    pub catch_handlers: Vec<EncodedCatchHandler>,
 }
 
 /// Bounded allocation: refuse a declared insns_size implying more than this
@@ -36,7 +39,11 @@ pub fn parse_code_item(r: &DexReader, code_off: u32) -> Result<CodeItem> {
     let insns_size = r.u32_at(base + 12)?;
 
     if insns_size > MAX_INSNS_SIZE {
-        return Err(DexError::CountTooLarge { offset: base + 12, count: insns_size as usize, cap: MAX_INSNS_SIZE as usize });
+        return Err(DexError::CountTooLarge {
+            offset: base + 12,
+            count: insns_size as usize,
+            cap: MAX_INSNS_SIZE as usize,
+        });
     }
 
     let mut insns = Vec::with_capacity((insns_size as usize).min(65536));
@@ -45,7 +52,18 @@ pub fn parse_code_item(r: &DexReader, code_off: u32) -> Result<CodeItem> {
         insns.push(r.u16_at(insns_base + i * 2)?);
     }
 
-    Ok(CodeItem { registers_size, ins_size, outs_size, tries_size, debug_info_off, insns })
+    let try_info = parse_try_catch_info(r, code_off, insns_size, tries_size)?;
+
+    Ok(CodeItem {
+        registers_size,
+        ins_size,
+        outs_size,
+        tries_size,
+        debug_info_off,
+        insns,
+        tries: try_info.tries,
+        catch_handlers: try_info.handlers,
+    })
 }
 
 #[derive(Debug, Clone)]
@@ -81,7 +99,11 @@ fn sign_extend(v: u32, bits: u32) -> i64 {
 /// indexing `insns` directly on those would panic on truncated/malformed
 /// input instead of failing gracefully like the rest of this crate does.
 fn get(insns: &[u16], i: usize) -> Result<u16> {
-    insns.get(i).copied().ok_or(DexError::Truncated { offset: i * 2, needed: 2, len: insns.len() * 2 })
+    insns.get(i).copied().ok_or(DexError::Truncated {
+        offset: i * 2,
+        needed: 2,
+        len: insns.len() * 2,
+    })
 }
 
 /// Decode a full insns stream into a sequence of CodeUnits (instructions and
@@ -105,7 +127,8 @@ pub fn decode_instructions(insns: &[u16]) -> Result<Vec<CodeUnit>> {
             match hi {
                 0x01 => {
                     let size = get(insns, pos + 1)? as usize;
-                    let first_key = (get(insns, pos + 2)? as i32) | ((get(insns, pos + 3)? as i32) << 16);
+                    let first_key =
+                        (get(insns, pos + 2)? as i32) | ((get(insns, pos + 3)? as i32) << 16);
                     let mut targets = Vec::with_capacity(size.min(1 << 16));
                     let mut p = pos + 4;
                     for _ in 0..size {
@@ -137,7 +160,8 @@ pub fn decode_instructions(insns: &[u16]) -> Result<Vec<CodeUnit>> {
                 }
                 0x03 => {
                     let element_width = get(insns, pos + 1)?;
-                    let size = (get(insns, pos + 2)? as u32) | ((get(insns, pos + 3)? as u32) << 16);
+                    let size =
+                        (get(insns, pos + 2)? as u32) | ((get(insns, pos + 3)? as u32) << 16);
                     let data_bytes = (size as usize).saturating_mul(element_width as usize);
                     let mut data = Vec::with_capacity(data_bytes.min(1 << 20));
                     let mut p = pos + 4;
@@ -152,7 +176,10 @@ pub fn decode_instructions(insns: &[u16]) -> Result<Vec<CodeUnit>> {
                         }
                         p += 1;
                     }
-                    out.push(CodeUnit::FillArrayDataPayload { element_width, data });
+                    out.push(CodeUnit::FillArrayDataPayload {
+                        element_width,
+                        data,
+                    });
                     pos = p;
                     continue;
                 }
@@ -163,7 +190,11 @@ pub fn decode_instructions(insns: &[u16]) -> Result<Vec<CodeUnit>> {
         let format = format_of(opcode).unwrap_or(Format::F10x); // reserved/unused opcodes are documented 10x width
         let width = format.width() as usize;
         if pos + width > insns.len() {
-            return Err(DexError::Truncated { offset: pos * 2, needed: width * 2, len: insns.len() * 2 });
+            return Err(DexError::Truncated {
+                offset: pos * 2,
+                needed: width * 2,
+                len: insns.len() * 2,
+            });
         }
 
         let unit1 = if width > 1 { insns[pos + 1] } else { 0 };
@@ -212,14 +243,14 @@ pub fn decode_instructions(insns: &[u16]) -> Result<Vec<CodeUnit>> {
             }
             Format::F21h => {
                 registers.push(hi as u16); // AA
-                // BBBB occupies bits 48-63 of the result, all lower bits
-                // zero-filled — always stored this way regardless of
-                // whether the opcode is the 32-bit form (const/high16,
-                // 0x15) or the 64-bit form (const-wide/high16, 0x19).
-                // Callers must check the opcode to know which: for the
-                // 32-bit form the real value is `(literal >> 32) as i32`
-                // (BBBB occupies its top 16 bits); for the 64-bit form
-                // it's `literal` as-is.
+                                           // BBBB occupies bits 48-63 of the result, all lower bits
+                                           // zero-filled — always stored this way regardless of
+                                           // whether the opcode is the 32-bit form (const/high16,
+                                           // 0x15) or the 64-bit form (const-wide/high16, 0x19).
+                                           // Callers must check the opcode to know which: for the
+                                           // 32-bit form the real value is `(literal >> 32) as i32`
+                                           // (BBBB occupies its top 16 bits); for the 64-bit form
+                                           // it's `literal` as-is.
                 literal = Some((unit1 as i64) << 48);
             }
             Format::F21c => {
@@ -286,7 +317,9 @@ pub fn decode_instructions(insns: &[u16]) -> Result<Vec<CodeUnit>> {
                 let count = hi as u32; // AA
                 index = Some(unit1 as u32); // BBBB
                 let first_reg = unit2; // CCCC
-                registers = (0..count).map(|i| first_reg.wrapping_add(i as u16)).collect();
+                registers = (0..count)
+                    .map(|i| first_reg.wrapping_add(i as u16))
+                    .collect();
             }
             Format::F45cc => {
                 let arg_count = (hi >> 4) & 0x0f;
@@ -304,7 +337,9 @@ pub fn decode_instructions(insns: &[u16]) -> Result<Vec<CodeUnit>> {
                 let count = hi as u32;
                 index = Some(unit1 as u32);
                 let first_reg = unit2;
-                registers = (0..count).map(|i| first_reg.wrapping_add(i as u16)).collect();
+                registers = (0..count)
+                    .map(|i| first_reg.wrapping_add(i as u16))
+                    .collect();
                 literal = Some(unit3 as i64); // HHHH proto idx
             }
             Format::F51l => {

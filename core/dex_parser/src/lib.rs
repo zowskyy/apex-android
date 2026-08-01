@@ -28,14 +28,20 @@ pub mod cfg;
 pub mod class_data;
 pub mod class_def;
 pub mod code;
+pub mod decompile;
 pub mod defuse;
 pub mod dominators;
+pub mod encoded;
 pub mod error;
 pub mod header;
+pub mod ids;
+pub mod java;
 pub mod opcode;
 pub mod reader;
 pub mod ssa;
 pub mod strings;
+pub mod structure;
+pub mod tries;
 
 use error::Result;
 use reader::DexReader;
@@ -45,6 +51,9 @@ pub struct DexFile<'a> {
     pub header: header::DexHeader,
     pub strings: Vec<String>,
     pub type_ids: Vec<u32>,
+    pub proto_ids: Vec<ids::ProtoId>,
+    pub field_ids: Vec<ids::FieldId>,
+    pub method_ids: Vec<ids::MethodId>,
     pub class_defs: Vec<class_def::ClassDef>,
 }
 
@@ -61,8 +70,21 @@ pub fn parse(data: &[u8]) -> Result<DexFile<'_>> {
     let header = header::read_header(&r)?;
     let strings = strings::read_all_strings(&r, header.string_ids_off, header.string_ids_size)?;
     let type_ids = strings::read_type_ids(&r, header.type_ids_off, header.type_ids_size)?;
-    let class_defs = class_def::parse_class_defs(&r, header.class_defs_off, header.class_defs_size)?;
-    Ok(DexFile { data, header, strings, type_ids, class_defs })
+    let proto_ids = ids::parse_proto_ids(&r, header.proto_ids_off, header.proto_ids_size)?;
+    let field_ids = ids::parse_field_ids(&r, header.field_ids_off, header.field_ids_size)?;
+    let method_ids = ids::parse_method_ids(&r, header.method_ids_off, header.method_ids_size)?;
+    let class_defs =
+        class_def::parse_class_defs(&r, header.class_defs_off, header.class_defs_size)?;
+    Ok(DexFile {
+        data,
+        header,
+        strings,
+        type_ids,
+        proto_ids,
+        field_ids,
+        method_ids,
+        class_defs,
+    })
 }
 
 impl<'a> DexFile<'a> {
@@ -81,10 +103,15 @@ impl<'a> DexFile<'a> {
     /// Resolve a method_ids table entry's name string, given a method_idx.
     /// method_id_item is a fixed 8-byte record: class_idx:u16, proto_idx:u16, name_idx:u32.
     pub fn method_name(&self, method_idx: u32) -> Result<&str> {
-        let r = DexReader::new(self.data);
-        let entry = self.header.method_ids_off as usize + (method_idx as usize) * 8;
-        let name_idx = r.u32_at(entry + 4)?;
-        Ok(self.strings.get(name_idx as usize).map(|s| s.as_str()).unwrap_or(""))
+        let Some(method) = self.method_ids.get(method_idx as usize) else {
+            return Ok("");
+        };
+        let name_idx = method.name_idx;
+        Ok(self
+            .strings
+            .get(name_idx as usize)
+            .map(|s| s.as_str())
+            .unwrap_or(""))
     }
 
     /// Parse a method's code_item (from `EncodedMethod::code_off`, 0 means
