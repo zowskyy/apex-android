@@ -150,14 +150,71 @@
     confirming the value is genuinely loop-carried, not just structurally
     present). Clippy clean (`-D warnings`). Whole workspace: 42 Rust tests
     passing (20 prior + 14 defuse + 3 dominators + 5 ssa).
+- 1.2 (complete) — `core/arsc_parser` (rlib `apex_arsc_parser`, not yet
+  PyO3-bridged): resources.arsc structural parser — table header, string
+  pools (both UTF-8 and UTF-16 encodings, plus style-span parsing for
+  formatted strings like `Hello <b>World</b>!`), package chunk (both the
+  legacy and modern/`typeIdOffset` `ResTable_package` header sizes),
+  typeSpec + type chunks, and both simple and complex/map entries (the
+  latter covers arrays, styles, and plurals). Bounded allocation on every
+  count field (string/style/entry/map counts), matching the project's
+  non-negotiable rule from KNOWLEDGE_BASE.md.
+  **Provenance**: no Android SDK is available in this environment
+  (`dl.google.com` is blocked by the outbound proxy), so real APK corpus
+  files can't be built here the way `tools/mobile_test_app` was on a prior
+  session's Windows machine. `pip install aapt2` (a PyPI package bundling
+  just the prebuilt `aapt2` binary, reachable via the allowed proxy) filled
+  the gap: `core/arsc_parser/tests/fixtures/resources.arsc` is genuine
+  `aapt2 compile`+`link` output, not hand-crafted bytes — the one
+  limitation is the fixture's `AndroidManifest.xml` has no `android:`
+  attributes (those need a framework jar via `-I`, which isn't available
+  either), but that's a manifest-linking constraint, not a resources.arsc
+  one; the resource table itself is unaffected and exercises real string
+  pools, a real styled string, and a real `<string-array>` complex entry.
+  See `core/arsc_parser/tests/fixtures/README.md` for exact regeneration
+  steps.
+  Every byte offset in the parser was hand-verified against this real file
+  with a throwaway Python decoder *before* writing the Rust, the same
+  discipline as the DEX slice — this caught one real bug during test
+  writing: `TypeChunk::is_default_config()` initially checked the whole raw
+  `ResTable_config` byte array for all-zero, but that array's own first 4
+  bytes are a self-describing size field (64 for the modern struct) which
+  is never zero, so every config — including the real default/no-qualifiers
+  one in the fixture — read as non-default. Fixed to skip those 4 bytes.
+  **Known gaps, explicitly unverified** (no toolchain path in this sandbox
+  could produce the bytes to check against, so these are implemented per
+  the AOSP `ResourceTypes.h` spec only, same honesty standard as
+  dex_parser's quickened-opcode range):
+  - `FLAG_SPARSE` entry tables (`aapt2 link --enable-sparse-encoding`
+    requires `--min-sdk-version`, which itself needs framework resolution
+    to inject into the manifest — blocked by the same missing-SDK gap).
+  - `ResTable_config` qualifier bytes are captured raw but not decoded
+    field-by-field (locale/density/screen size/etc.) — only "is this the
+    default config" is exposed. Real per-qualifier resolution is a
+    separately-scoped follow-up.
+  - `FLAG_OFFSET16` (a newer 16-bit-offset dense variant) is explicitly
+    rejected with a dedicated error rather than silently misparsed.
+  8 tests against the real fixture (global string pool + style span,
+  package identity/name pools, simple string entries resolved through the
+  global pool, simple non-string entries across 3 different `dataType`s,
+  the complex `<string-array>` entry's synthetic item names and ordered
+  values, typeSpec/type entry-count consistency) + 2 hand-built string-pool
+  unit tests (round-trip, bounded-allocation rejection). Clippy clean
+  (`-D warnings`). Whole workspace: 50 Rust tests passing (42 prior + 8
+  arsc_parser).
 
 ## Next Slice
-1.2 (resources.arsc) and 1.3 (binary XML) remain open, order between them
-free — 1.5/1.6 were pulled forward opportunistically because of the
-dex-hybrid review, and are now both complete through real SSA. A natural
-next step once 1.2/1.3 land: wire `ssa::build_ssa` output into an actual
-IR->Java emitter (the still-open "Slice 1.7" mentioned in the 1.5 note
-above), since instructions/CFG/def-use/SSA are now all real.
+1.3 (binary XML decoder, `core/manifest_decoder` per the blueprint) is the
+one remaining open Phase-1 read-only-analysis slice before `apex inspect`
+(1.4) becomes buildable — it shares the string-pool format 1.2 just built
+(binary XML files embed the same `ResStringPool` chunk for their tag/
+attribute-value strings), so `core/arsc_parser::string_pool` should be
+reused rather than re-implemented. The `resources.arsc`-fixture aapt2
+toolchain path (`pip install aapt2`) is already proven and can produce a
+real compiled binary `AndroidManifest.xml` the same way. After that, wire
+`ssa::build_ssa` output into an actual IR->Java emitter (the still-open
+"Slice 1.7" mentioned in the 1.5 note above), since instructions/CFG/
+def-use/SSA are now all real.
 
 ## Blockers
 - None.
