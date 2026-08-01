@@ -12,6 +12,7 @@ checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 name = "apex_arsc_parser"
 version = "0.1.0"
 dependencies = [
+ "pyo3",
  "thiserror",
 ]
 
@@ -19,6 +20,7 @@ dependencies = [
 name = "apex_dex_parser"
 version = "0.1.0"
 dependencies = [
+ "pyo3",
  "thiserror",
 ]
 

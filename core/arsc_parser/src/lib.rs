@@ -20,6 +20,7 @@
 //! a specific device configuration against the qualifier bit layout is a
 //! separate, sizable slice of its own.
 
+pub mod axml;
 pub mod entry;
 pub mod error;
 pub mod package;
@@ -30,6 +31,12 @@ pub mod value;
 use error::{ArscError, Result};
 use reader::{read_chunk_header, ArscReader, CHUNK_HEADER_SIZE};
 use string_pool::StringPool;
+
+use pyo3::exceptions::PyValueError;
+use pyo3::prelude::*;
+use pyo3::types::{PyAny, PyDict};
+
+pub use axml::{axml_strings, decode_axml, is_binary_xml};
 
 pub const RES_TABLE_TYPE: u16 = 0x0002;
 
@@ -51,7 +58,11 @@ pub fn parse(data: &[u8]) -> Result<ResourceTable> {
     }
     let package_count = r.u32_at(CHUNK_HEADER_SIZE)?;
     if package_count > MAX_PACKAGE_COUNT {
-        return Err(ArscError::CountTooLarge { offset: CHUNK_HEADER_SIZE, count: package_count as usize, cap: MAX_PACKAGE_COUNT as usize });
+        return Err(ArscError::CountTooLarge {
+            offset: CHUNK_HEADER_SIZE,
+            count: package_count as usize,
+            cap: MAX_PACKAGE_COUNT as usize,
+        });
     }
 
     let global_strings = string_pool::parse_string_pool(&r, header.header_size as usize)?;
@@ -64,7 +75,10 @@ pub fn parse(data: &[u8]) -> Result<ResourceTable> {
         packages.push(pkg);
     }
 
-    Ok(ResourceTable { global_strings, packages })
+    Ok(ResourceTable {
+        global_strings,
+        packages,
+    })
 }
 
 impl ResourceTable {
@@ -75,4 +89,82 @@ impl ResourceTable {
     pub fn resolve_string(&self, index: u32) -> Result<&str> {
         self.global_strings.get(index)
     }
+}
+
+#[pyfunction]
+fn arsc_summary(py: Python<'_>, data: &[u8]) -> PyResult<Py<PyAny>> {
+    let table = parse(data).map_err(|err| PyValueError::new_err(err.to_string()))?;
+    let packages: PyResult<Vec<Py<PyAny>>> = table
+        .packages
+        .iter()
+        .map(|pkg| {
+            let pkg_dict = PyDict::new(py);
+            pkg_dict.set_item("id", pkg.id)?;
+            pkg_dict.set_item("name", &pkg.name)?;
+            let types: PyResult<Vec<Py<PyAny>>> = pkg
+                .types
+                .iter()
+                .map(|ty| {
+                    let ty_dict = PyDict::new(py);
+                    ty_dict.set_item("id", ty.id)?;
+                    ty_dict.set_item("name", &ty.name)?;
+                    ty_dict.set_item("entry_count", ty.spec_flags.len())?;
+                    ty_dict.set_item("config_count", ty.configs.len())?;
+                    Ok(ty_dict.into_any().unbind())
+                })
+                .collect();
+            let entry_count: usize = pkg.types.iter().map(|ty| ty.spec_flags.len()).sum();
+            let config_count: usize = pkg.types.iter().map(|ty| ty.configs.len()).sum();
+            pkg_dict.set_item("entry_count", entry_count)?;
+            pkg_dict.set_item("config_count", config_count)?;
+            pkg_dict.set_item("types", types?)?;
+            Ok(pkg_dict.into_any().unbind())
+        })
+        .collect();
+    let dict = PyDict::new(py);
+    dict.set_item("global_string_count", table.global_strings.strings.len())?;
+    dict.set_item("packages", packages?)?;
+    Ok(dict.into_any().unbind())
+}
+
+#[pyfunction(name = "decode_axml")]
+fn py_decode_axml(data: &[u8]) -> PyResult<String> {
+    axml::decode_axml(data).map_err(|err| PyValueError::new_err(err.to_string()))
+}
+
+#[pyfunction(name = "axml_strings")]
+fn py_axml_strings(data: &[u8]) -> PyResult<Vec<String>> {
+    axml::axml_strings(data).map_err(|err| PyValueError::new_err(err.to_string()))
+}
+
+#[pyfunction]
+fn scan_string_pools(data: &[u8]) -> PyResult<Vec<String>> {
+    let r = ArscReader::new(data);
+    let mut strings = Vec::new();
+    for offset in 0..data.len().saturating_sub(CHUNK_HEADER_SIZE - 1) {
+        if data[offset] != (string_pool::RES_STRING_POOL_TYPE & 0xff) as u8
+            || data[offset + 1] != (string_pool::RES_STRING_POOL_TYPE >> 8) as u8
+        {
+            continue;
+        }
+        if let Ok(pool) = string_pool::parse_string_pool(&r, offset) {
+            strings.extend(pool.strings);
+        }
+    }
+    Ok(strings)
+}
+
+#[pyfunction(name = "is_binary_xml")]
+fn py_is_binary_xml(data: &[u8]) -> bool {
+    axml::is_binary_xml(data)
+}
+
+#[pymodule]
+fn apex_arsc_parser(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(arsc_summary, m)?)?;
+    m.add_function(wrap_pyfunction!(py_decode_axml, m)?)?;
+    m.add_function(wrap_pyfunction!(py_axml_strings, m)?)?;
+    m.add_function(wrap_pyfunction!(scan_string_pools, m)?)?;
+    m.add_function(wrap_pyfunction!(py_is_binary_xml, m)?)?;
+    Ok(())
 }

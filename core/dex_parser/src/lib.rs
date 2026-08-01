@@ -44,6 +44,9 @@ pub mod structure;
 pub mod tries;
 
 use error::Result;
+use pyo3::exceptions::PyValueError;
+use pyo3::prelude::*;
+use pyo3::types::{PyAny, PyDict};
 use reader::DexReader;
 
 pub struct DexFile<'a> {
@@ -122,4 +125,45 @@ impl<'a> DexFile<'a> {
         let units = code::decode_instructions(&item.insns)?;
         Ok((item, units))
     }
+}
+
+#[pyfunction]
+fn decompile_dex(data: &[u8]) -> PyResult<Vec<(String, String)>> {
+    let dex = parse(data).map_err(|err| PyValueError::new_err(err.to_string()))?;
+    Ok(java::decompile_all(&dex))
+}
+
+#[pyfunction]
+fn dex_summary(py: Python<'_>, data: &[u8]) -> PyResult<Py<PyAny>> {
+    let dex = parse(data).map_err(|err| PyValueError::new_err(err.to_string()))?;
+    let classes: PyResult<Vec<Py<PyAny>>> = java::class_summaries(&dex)
+        .into_iter()
+        .map(|summary| {
+            let dict = PyDict::new(py);
+            dict.set_item("name", summary.name)?;
+            dict.set_item("superclass", summary.superclass)?;
+            dict.set_item(
+                "method_count",
+                summary.direct_methods + summary.virtual_methods,
+            )?;
+            dict.set_item(
+                "field_count",
+                summary.static_fields + summary.instance_fields,
+            )?;
+            Ok(dict.into_any().unbind())
+        })
+        .collect();
+    let dict = PyDict::new(py);
+    dict.set_item("class_count", dex.class_defs.len())?;
+    dict.set_item("method_count", dex.method_ids.len())?;
+    dict.set_item("string_count", dex.strings.len())?;
+    dict.set_item("classes", classes?)?;
+    Ok(dict.into_any().unbind())
+}
+
+#[pymodule]
+fn apex_dex_parser(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(decompile_dex, m)?)?;
+    m.add_function(wrap_pyfunction!(dex_summary, m)?)?;
+    Ok(())
 }
