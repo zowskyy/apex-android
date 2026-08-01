@@ -89,13 +89,132 @@
   resolution in isolation — plus 1 real-DEX test confirming `onCreate`
   (no branches) produces a single block with no edges. Clippy clean. Whole
   workspace: 20 Rust tests passing.
+- 1.6 (complete) — real SSA form + def-use tracking, three new modules:
+  - `core/dex_parser::defuse` — per-instruction register def/use extraction.
+    One exhaustive match over the opcode byte (mirrors opcode.rs's
+    `format_of` layout so it can be audited directly against the Dalvik
+    reference table), correctly distinguishing which operand position is
+    def vs. use *and* whether it's a single register or the low half of a
+    64-bit pair (e.g. `add-long/2addr vA, vB` defines+uses the pair at vA
+    and uses the pair at vB; `iput-wide vA, vB, field` uses the pair at vA
+    but only the single register vB, since the object ref is never wide).
+    Field/array/static accesses report only the vreg operands actually
+    read/written — `iput` uses 2 registers but defines none (the def lands
+    in a field, not a vreg). The quickened/ODEX-only range (0xe3-0xf9) is
+    conservatively use-only, consistent with opcode.rs already flagging
+    that range as unverified against real bytecode. 14 unit tests covering
+    move/wide, 2addr binops (narrow and wide, including the shift-amount-
+    stays-narrow case for shl/shr/ushr-long), iget/iput/aget/aput (wide and
+    narrow), invoke, move-result-wide, check-cast, and the quickened
+    fallback.
+  - `core/dex_parser::dominators` — immediate dominators (Cooper/Harvey/
+    Kennedy iterative algorithm) and dominance frontiers (Cytron et al.),
+    over a real reverse-postorder DFS from the entry block (block ids are
+    assigned in code-offset order, which is *not* the same as RPO once a
+    forward branch skips a block, so RPO is computed explicitly rather than
+    assumed). Found and fixed one real gap while testing against a
+    self-looping entry block: the textbook Cytron algorithm implicitly
+    assumes the entry block has an "outside" (caller) predecessor it never
+    represents as a graph edge, so when entry's *only* real predecessor is
+    itself (a single-block infinite loop, e.g. `while(true) { x++; }`
+    compiled with no separate preheader/body blocks), the standard
+    predecessors>=2 gate and the idom-walk both independently skip it,
+    silently omitting entry from its own dominance frontier even though a
+    register redefined every iteration and read at the top genuinely needs
+    a phi there. Fixed with a targeted special case (see the code comment
+    at the fix site); every other self-loop shape (one with a real,
+    non-self predecessor too, e.g. a proper preheader+header) already
+    handled this correctly via the general algorithm before the fix. 3 unit
+    tests: the if/else diamond's dominance frontier, the self-loop-frontier
+    case above, and straight-line triviality.
+  - `core/dex_parser::ssa` — minimal-SSA construction: phi placement via
+    iterated dominance frontier per register (Cytron et al.), then a
+    dominator-tree-order renaming pass (explicit-stack DFS, not recursive,
+    so adversarial/deeply-nested CFGs can't blow the stack) that assigns a
+    fresh version to every def and resolves every use to its reaching
+    definition, recording full def-use chains (`uses_of: SsaValue -> Vec<
+    UseSite>`, covering both ordinary-instruction uses and phi-operand
+    uses). Version 0 is the convention for "value live on entry" (parameter
+    or genuinely-undefined read — this layer doesn't have `ins_size` to
+    tell those apart, and doesn't need to for def-use purposes). Blocks
+    unreachable from the entry (dead code) are still converted to output
+    but renamed in isolation, with no phis and no cross-block merging,
+    since there's no dominance relationship to justify one. 5 unit tests:
+    the if/else diamond (a join-block phi with 2 distinct operand
+    versions, one per branch), straight-line code (must reference the most
+    *recent* def, not just some def), an undefined read resolving to
+    version 0, a real 2-block loop header merging its preheader and
+    back-edge defs via a phi, and the single-block self-loop case that
+    exercised the dominators.rs fix above end-to-end (phi's back-edge
+    operand must equal the loop body's own def of the carried register,
+    confirming the value is genuinely loop-carried, not just structurally
+    present). Clippy clean (`-D warnings`). Whole workspace: 42 Rust tests
+    passing (20 prior + 14 defuse + 3 dominators + 5 ssa).
+- 1.2 (complete) — `core/arsc_parser` (rlib `apex_arsc_parser`, not yet
+  PyO3-bridged): resources.arsc structural parser — table header, string
+  pools (both UTF-8 and UTF-16 encodings, plus style-span parsing for
+  formatted strings like `Hello <b>World</b>!`), package chunk (both the
+  legacy and modern/`typeIdOffset` `ResTable_package` header sizes),
+  typeSpec + type chunks, and both simple and complex/map entries (the
+  latter covers arrays, styles, and plurals). Bounded allocation on every
+  count field (string/style/entry/map counts), matching the project's
+  non-negotiable rule from KNOWLEDGE_BASE.md.
+  **Provenance**: no Android SDK is available in this environment
+  (`dl.google.com` is blocked by the outbound proxy), so real APK corpus
+  files can't be built here the way `tools/mobile_test_app` was on a prior
+  session's Windows machine. `pip install aapt2` (a PyPI package bundling
+  just the prebuilt `aapt2` binary, reachable via the allowed proxy) filled
+  the gap: `core/arsc_parser/tests/fixtures/resources.arsc` is genuine
+  `aapt2 compile`+`link` output, not hand-crafted bytes — the one
+  limitation is the fixture's `AndroidManifest.xml` has no `android:`
+  attributes (those need a framework jar via `-I`, which isn't available
+  either), but that's a manifest-linking constraint, not a resources.arsc
+  one; the resource table itself is unaffected and exercises real string
+  pools, a real styled string, and a real `<string-array>` complex entry.
+  See `core/arsc_parser/tests/fixtures/README.md` for exact regeneration
+  steps.
+  Every byte offset in the parser was hand-verified against this real file
+  with a throwaway Python decoder *before* writing the Rust, the same
+  discipline as the DEX slice — this caught one real bug during test
+  writing: `TypeChunk::is_default_config()` initially checked the whole raw
+  `ResTable_config` byte array for all-zero, but that array's own first 4
+  bytes are a self-describing size field (64 for the modern struct) which
+  is never zero, so every config — including the real default/no-qualifiers
+  one in the fixture — read as non-default. Fixed to skip those 4 bytes.
+  **Known gaps, explicitly unverified** (no toolchain path in this sandbox
+  could produce the bytes to check against, so these are implemented per
+  the AOSP `ResourceTypes.h` spec only, same honesty standard as
+  dex_parser's quickened-opcode range):
+  - `FLAG_SPARSE` entry tables (`aapt2 link --enable-sparse-encoding`
+    requires `--min-sdk-version`, which itself needs framework resolution
+    to inject into the manifest — blocked by the same missing-SDK gap).
+  - `ResTable_config` qualifier bytes are captured raw but not decoded
+    field-by-field (locale/density/screen size/etc.) — only "is this the
+    default config" is exposed. Real per-qualifier resolution is a
+    separately-scoped follow-up.
+  - `FLAG_OFFSET16` (a newer 16-bit-offset dense variant) is explicitly
+    rejected with a dedicated error rather than silently misparsed.
+  8 tests against the real fixture (global string pool + style span,
+  package identity/name pools, simple string entries resolved through the
+  global pool, simple non-string entries across 3 different `dataType`s,
+  the complex `<string-array>` entry's synthetic item names and ordered
+  values, typeSpec/type entry-count consistency) + 2 hand-built string-pool
+  unit tests (round-trip, bounded-allocation rejection). Clippy clean
+  (`-D warnings`). Whole workspace: 50 Rust tests passing (42 prior + 8
+  arsc_parser).
 
 ## Next Slice
-1.6 (continued) — real SSA form (phi-node insertion at join blocks, using
-the now-correct predecessor lists) and def-use tracking, building directly
-on the CFG above. Then 1.2 (resources.arsc) and 1.3 (binary XML) remain
-open in parallel — order between them is free, 1.5 was pulled forward
-opportunistically because of the dex-hybrid review.
+1.3 (binary XML decoder, `core/manifest_decoder` per the blueprint) is the
+one remaining open Phase-1 read-only-analysis slice before `apex inspect`
+(1.4) becomes buildable — it shares the string-pool format 1.2 just built
+(binary XML files embed the same `ResStringPool` chunk for their tag/
+attribute-value strings), so `core/arsc_parser::string_pool` should be
+reused rather than re-implemented. The `resources.arsc`-fixture aapt2
+toolchain path (`pip install aapt2`) is already proven and can produce a
+real compiled binary `AndroidManifest.xml` the same way. After that, wire
+`ssa::build_ssa` output into an actual IR->Java emitter (the still-open
+"Slice 1.7" mentioned in the 1.5 note above), since instructions/CFG/
+def-use/SSA are now all real.
 
 ## Blockers
 - None.

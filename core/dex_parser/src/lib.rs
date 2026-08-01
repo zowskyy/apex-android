@@ -28,10 +28,13 @@ pub mod cfg;
 pub mod class_data;
 pub mod class_def;
 pub mod code;
+pub mod defuse;
+pub mod dominators;
 pub mod error;
 pub mod header;
 pub mod opcode;
 pub mod reader;
+pub mod ssa;
 pub mod strings;
 
 use error::Result;

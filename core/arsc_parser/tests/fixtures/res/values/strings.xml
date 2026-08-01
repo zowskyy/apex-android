@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">APEX Test App</string>
+    <string name="hello_label">APEX debug fixture — real aapt2 output</string>
+    <string name="styled_text">Hello <b>World</b>!</string>
+    <string-array name="days">
+        <item>Mon</item>
+        <item>Tue</item>
+        <item>Wed</item>
+    </string-array>
+</resources>
