@@ -3,31 +3,12 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 import shutil
-import sqlite3
 import sys
 import zipfile
-from concurrent.futures import ProcessPoolExecutor, as_completed
-from dataclasses import dataclass, asdict
 from pathlib import Path
-from typing import Iterable, Any
+from typing import Any
 import xml.etree.ElementTree as ET
-
-try:
-    import networkx as nx
-except Exception:
-    nx = None
-
-try:
-    from jinja2 import Template
-except Exception:
-    Template = None
-
-try:
-    import apex_zip_reader as _native_zip
-except Exception:
-    _native_zip = None
 
 
 ENTRY_POINT_HINTS = ("MainActivity", "Application", "Service", "Receiver", "Provider")
@@ -100,6 +81,10 @@ def extract_apk(apk_path: Path, work_dir: Path) -> tuple[Path, dict[str, Any]]:
     """
     extract_dir = work_dir / "extracted"
     extract_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        import apex_zip_reader as _native_zip
+    except Exception:
+        _native_zip = None
     if _native_zip is not None:
         report = _native_zip.extract_apk(str(apk_path), str(extract_dir))
         report = dict(report)
@@ -267,6 +252,8 @@ class Store:
 
 class SQLiteStore(Store):
     def __init__(self, path: Path):
+        import sqlite3
+
         self.conn = sqlite3.connect(path)
         self.conn.execute("CREATE TABLE IF NOT EXISTS kv (name TEXT PRIMARY KEY, json TEXT NOT NULL)")
         self.conn.commit()
@@ -374,6 +361,10 @@ HTML_TEMPLATE = """<!doctype html>
 
 
 def render_html(meta: dict, dex: dict, native: dict, resources: dict, reach: dict, xref: dict) -> str:
+    try:
+        from jinja2 import Template
+    except Exception:
+        Template = None
     if Template is None:
         return f"<pre>Jinja2 not installed.\n{json.dumps({'meta': meta, 'reach': reach}, indent=2)}</pre>"
     t = Template(HTML_TEMPLATE)
@@ -463,6 +454,10 @@ def cmd_diff(args: argparse.Namespace) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(prog="apex", description="APEX — Android Package EXaminer")
     sub = parser.add_subparsers(dest="cmd", required=True)
+
+    from .commands import add_cli_commands
+
+    add_cli_commands(sub)
 
     a = sub.add_parser("analyze", help="Full APK analysis")
     a.add_argument("apk")

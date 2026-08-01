@@ -42,7 +42,8 @@ pub struct ControlFlowGraph {
 }
 
 fn is_unconditional_exit(opcode: u8) -> bool {
-    matches!(opcode,
+    matches!(
+        opcode,
         0x0e..=0x11 // return-void, return, return-wide, return-object
         | 0x27      // throw
         | 0x28 | 0x29 | 0x2a // goto, goto/16, goto/32
@@ -61,10 +62,15 @@ fn is_switch(opcode: u8) -> bool {
 /// instruction by following its branch_offset to the payload block and
 /// reading targets from there (each relative to `switch_offset`, per spec
 /// - NOT relative to the payload's own position).
-fn resolve_switch_targets(switch_offset: u32, branch_offset: i32, payloads_by_offset: &BTreeMap<u32, &CodeUnit>) -> Vec<u32> {
+fn resolve_switch_targets(
+    switch_offset: u32,
+    branch_offset: i32,
+    payloads_by_offset: &BTreeMap<u32, &CodeUnit>,
+) -> Vec<u32> {
     let payload_offset = (switch_offset as i64 + branch_offset as i64) as u32;
     match payloads_by_offset.get(&payload_offset) {
-        Some(CodeUnit::PackedSwitchPayload { targets, .. }) | Some(CodeUnit::SparseSwitchPayload { targets, .. }) => targets
+        Some(CodeUnit::PackedSwitchPayload { targets, .. })
+        | Some(CodeUnit::SparseSwitchPayload { targets, .. }) => targets
             .iter()
             .map(|&t| (switch_offset as i64 + t as i64) as u32)
             .collect(),
@@ -116,7 +122,8 @@ pub fn build_cfg(units: &[CodeUnit]) -> ControlFlowGraph {
         map
     };
 
-    let last_offset = instructions.last().unwrap().code_unit_offset + instructions.last().unwrap().format.width();
+    let last_offset =
+        instructions.last().unwrap().code_unit_offset + instructions.last().unwrap().format.width();
 
     // --- Rule 1 & 2: collect leaders (first instr + every branch target) ---
     let mut leaders: BTreeSet<u32> = BTreeSet::new();
@@ -127,7 +134,8 @@ pub fn build_cfg(units: &[CodeUnit]) -> ControlFlowGraph {
 
         if is_switch(insn.opcode) {
             if let Some(bo) = insn.branch_offset {
-                for target in resolve_switch_targets(insn.code_unit_offset, bo, &payloads_by_offset) {
+                for target in resolve_switch_targets(insn.code_unit_offset, bo, &payloads_by_offset)
+                {
                     leaders.insert(target);
                 }
             }
@@ -135,7 +143,10 @@ pub fn build_cfg(units: &[CodeUnit]) -> ControlFlowGraph {
             if next_offset < last_offset {
                 leaders.insert(next_offset);
             }
-        } else if matches!(insn.format, Format::F10t | Format::F20t | Format::F30t) || is_conditional_branch(insn.opcode) || matches!(insn.format, Format::F21t | Format::F22t) {
+        } else if matches!(insn.format, Format::F10t | Format::F20t | Format::F30t)
+            || is_conditional_branch(insn.opcode)
+            || matches!(insn.format, Format::F21t | Format::F22t)
+        {
             if let Some(bo) = insn.branch_offset {
                 let target = (insn.code_unit_offset as i64 + bo as i64) as u32;
                 leaders.insert(target);
@@ -159,7 +170,14 @@ pub fn build_cfg(units: &[CodeUnit]) -> ControlFlowGraph {
             .filter(|i| i.code_unit_offset >= start && i.code_unit_offset < end)
             .map(|&i| i.clone())
             .collect();
-        blocks.push(BasicBlock { id: idx as u32, start, end, instructions: block_insns, successors: Vec::new(), predecessors: Vec::new() });
+        blocks.push(BasicBlock {
+            id: idx as u32,
+            start,
+            end,
+            instructions: block_insns,
+            successors: Vec::new(),
+            predecessors: Vec::new(),
+        });
     }
 
     let block_id_at = |offset: u32, blocks: &[BasicBlock]| -> Option<u32> {
@@ -169,12 +187,15 @@ pub fn build_cfg(units: &[CodeUnit]) -> ControlFlowGraph {
     // --- Compute successors (and simultaneously the predecessor inverse) ---
     let mut edges: Vec<(u32, u32)> = Vec::new();
     for block in &blocks {
-        let Some(last) = block.instructions.last() else { continue };
+        let Some(last) = block.instructions.last() else {
+            continue;
+        };
         let fallthrough_offset = block.end;
 
         if is_switch(last.opcode) {
             if let Some(bo) = last.branch_offset {
-                for target in resolve_switch_targets(last.code_unit_offset, bo, &payloads_by_offset) {
+                for target in resolve_switch_targets(last.code_unit_offset, bo, &payloads_by_offset)
+                {
                     if let Some(tid) = block_id_at(target, &blocks) {
                         edges.push((block.id, tid));
                     }
@@ -193,7 +214,9 @@ pub fn build_cfg(units: &[CodeUnit]) -> ControlFlowGraph {
                     edges.push((block.id, tid));
                 }
             }
-        } else if is_conditional_branch(last.opcode) || matches!(last.format, Format::F21t | Format::F22t) {
+        } else if is_conditional_branch(last.opcode)
+            || matches!(last.format, Format::F21t | Format::F22t)
+        {
             if let Some(bo) = last.branch_offset {
                 let target = (last.code_unit_offset as i64 + bo as i64) as u32;
                 if let Some(tid) = block_id_at(target, &blocks) {
@@ -227,7 +250,15 @@ mod tests {
     use super::*;
 
     fn insn(offset: u32, opcode: u8, format: Format, branch_offset: Option<i32>) -> Instruction {
-        Instruction { code_unit_offset: offset, opcode, format, registers: Vec::new(), literal: None, branch_offset, index: None }
+        Instruction {
+            code_unit_offset: offset,
+            opcode,
+            format,
+            registers: Vec::new(),
+            literal: None,
+            branch_offset,
+            index: None,
+        }
     }
 
     /// if (v0 == 0) { <else> } else-target skipped; <then>; goto end; <else>; end: return
@@ -246,17 +277,30 @@ mod tests {
         ];
 
         let cfg = build_cfg(&units);
-        assert_eq!(cfg.blocks.len(), 4, "expected 4 blocks: [0,2) if-head, [2,4) then, [4,5) else, [5,6) join");
+        assert_eq!(
+            cfg.blocks.len(),
+            4,
+            "expected 4 blocks: [0,2) if-head, [2,4) then, [4,5) else, [5,6) join"
+        );
 
         let entry = &cfg.blocks[0];
         assert_eq!((entry.start, entry.end), (0, 2));
         assert_eq!(entry.predecessors, Vec::<u32>::new());
 
-        let join = cfg.blocks.iter().find(|b| b.start == 5).expect("join block at offset 5");
+        let join = cfg
+            .blocks
+            .iter()
+            .find(|b| b.start == 5)
+            .expect("join block at offset 5");
         assert_eq!(join.end, 6);
         let mut preds = join.predecessors.clone();
         preds.sort();
-        assert_eq!(preds.len(), 2, "join block must have exactly 2 predecessors (then + else), got {:?}", join.predecessors);
+        assert_eq!(
+            preds.len(),
+            2,
+            "join block must have exactly 2 predecessors (then + else), got {:?}",
+            join.predecessors
+        );
 
         // Every predecessor of the join block must list it back as a successor.
         for &p in &join.predecessors {
@@ -269,12 +313,16 @@ mod tests {
     #[test]
     fn self_loop_back_edge() {
         let units = vec![
-            CodeUnit::Insn(insn(0, 0x00, Format::F10x, None)),    // nop
+            CodeUnit::Insn(insn(0, 0x00, Format::F10x, None)), // nop
             CodeUnit::Insn(insn(1, 0x28, Format::F10t, Some(-1))), // goto -1 -> target 0
         ];
 
         let cfg = build_cfg(&units);
-        assert_eq!(cfg.blocks.len(), 1, "no other leaders exist, so this is a single self-looping block");
+        assert_eq!(
+            cfg.blocks.len(),
+            1,
+            "no other leaders exist, so this is a single self-looping block"
+        );
         let block = &cfg.blocks[0];
         assert_eq!(block.successors, vec![0]);
         assert_eq!(block.predecessors, vec![0]);
@@ -304,7 +352,10 @@ mod tests {
     fn resolve_switch_targets_follows_payload_indirection() {
         let switch_offset = 10u32;
         let payload_offset = 20u32; // switch_offset + branch_offset(10)
-        let payload = CodeUnit::PackedSwitchPayload { first_key: 0, targets: vec![5, 8] };
+        let payload = CodeUnit::PackedSwitchPayload {
+            first_key: 0,
+            targets: vec![5, 8],
+        };
         let mut map: BTreeMap<u32, &CodeUnit> = BTreeMap::new();
         map.insert(payload_offset, &payload);
 

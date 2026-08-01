@@ -7,7 +7,7 @@ use std::io::Read;
 use std::path::PathBuf;
 
 use pyo3::prelude::*;
-use pyo3::types::{PyAny, PyDict};
+use pyo3::types::{PyAny, PyBytes, PyDict};
 
 use entry::EntryInfo;
 use error::ApexZipError;
@@ -38,21 +38,15 @@ fn open_archive(apk_path: &str) -> Result<zip::ZipArchive<fs::File>, ApexZipErro
     Ok(archive)
 }
 
-/// List every entry in a ZIP/APK with a CLEAN/WARN verdict per entry.
-/// Never writes to disk. Bounded allocation: refuses archives with more
-/// than `sanitize::MAX_ENTRIES` entries before iterating.
-#[pyfunction]
-fn read_entries(py: Python<'_>, apk_path: &str) -> PyResult<Vec<Py<PyAny>>> {
-    let mut archive = open_archive(apk_path).map_err(PyErr::from)?;
+fn collect_entry_infos(
+    archive: &mut zip::ZipArchive<fs::File>,
+) -> Result<Vec<EntryInfo>, ApexZipError> {
     let mut results = Vec::with_capacity(archive.len());
     let mut running_total: u64 = 0;
     let mut cap_breached = false;
 
     for i in 0..archive.len() {
-        let zfile = archive
-            .by_index_raw(i)
-            .map_err(ApexZipError::from)
-            .map_err(PyErr::from)?;
+        let zfile = archive.by_index_raw(i)?;
         let raw_name = zfile.name().to_string();
         let mut info = EntryInfo::from_raw(
             &raw_name,
@@ -73,10 +67,134 @@ fn read_entries(py: Python<'_>, apk_path: &str) -> PyResult<Vec<Py<PyAny>>> {
             }
         }
 
-        results.push(entry_to_dict(py, &info)?.into_any().unbind());
+        results.push(info);
     }
 
     Ok(results)
+}
+
+/// List every entry in a ZIP/APK with a CLEAN/WARN verdict per entry.
+/// Never writes to disk. Bounded allocation: refuses archives with more
+/// than `sanitize::MAX_ENTRIES` entries before iterating.
+#[pyfunction]
+fn read_entries(py: Python<'_>, apk_path: &str) -> PyResult<Vec<Py<PyAny>>> {
+    let mut archive = open_archive(apk_path).map_err(PyErr::from)?;
+    collect_entry_infos(&mut archive)
+        .map_err(PyErr::from)?
+        .iter()
+        .map(|info| entry_to_dict(py, info).map(|dict| dict.into_any().unbind()))
+        .collect()
+}
+
+/// Return entry metadata as parallel Python lists to reduce FFI crossings for
+/// callers that immediately build columnar DataFrames or scan reports.
+#[pyfunction]
+fn read_entries_columnar(py: Python<'_>, apk_path: &str) -> PyResult<Py<PyAny>> {
+    let mut archive = open_archive(apk_path).map_err(PyErr::from)?;
+    let entries = collect_entry_infos(&mut archive).map_err(PyErr::from)?;
+    let dict = PyDict::new(py);
+    dict.set_item(
+        "names",
+        entries
+            .iter()
+            .map(|info| info.raw_name.clone())
+            .collect::<Vec<_>>(),
+    )?;
+    dict.set_item(
+        "sanitized_names",
+        entries
+            .iter()
+            .map(|info| info.sanitized_name.clone())
+            .collect::<Vec<_>>(),
+    )?;
+    dict.set_item(
+        "verdicts",
+        entries.iter().map(|info| info.verdict).collect::<Vec<_>>(),
+    )?;
+    dict.set_item(
+        "reasons",
+        entries
+            .iter()
+            .map(|info| info.reason.clone())
+            .collect::<Vec<_>>(),
+    )?;
+    dict.set_item(
+        "compressed_sizes",
+        entries
+            .iter()
+            .map(|info| info.compressed_size)
+            .collect::<Vec<_>>(),
+    )?;
+    dict.set_item(
+        "uncompressed_sizes",
+        entries
+            .iter()
+            .map(|info| info.uncompressed_size)
+            .collect::<Vec<_>>(),
+    )?;
+    dict.set_item(
+        "crc32s",
+        entries.iter().map(|info| info.crc32).collect::<Vec<_>>(),
+    )?;
+    dict.set_item(
+        "extracted",
+        entries
+            .iter()
+            .map(|info| info.extracted)
+            .collect::<Vec<_>>(),
+    )?;
+    Ok(dict.into_any().unbind())
+}
+
+/// Read selected APK entries into memory without extracting the archive.
+#[pyfunction]
+fn read_entries_data(py: Python<'_>, apk_path: &str, names: Vec<String>) -> PyResult<Py<PyAny>> {
+    if names.len() > sanitize::MAX_ENTRIES {
+        return Err(PyErr::from(ApexZipError::Bounds(format!(
+            "requested {} entries, exceeds max {}",
+            names.len(),
+            sanitize::MAX_ENTRIES
+        ))));
+    }
+    let mut archive = open_archive(apk_path).map_err(PyErr::from)?;
+    let dict = PyDict::new(py);
+    let mut running_total: u64 = 0;
+
+    for name in names {
+        let mut zfile = archive
+            .by_name(&name)
+            .map_err(ApexZipError::from)
+            .map_err(PyErr::from)?;
+        if zfile.size() > sanitize::MAX_ENTRY_UNCOMPRESSED {
+            return Err(PyErr::from(ApexZipError::Bounds(format!(
+                "entry {name} declared uncompressed size {} exceeds per-entry cap {}",
+                zfile.size(),
+                sanitize::MAX_ENTRY_UNCOMPRESSED
+            ))));
+        }
+        running_total = running_total.saturating_add(zfile.size());
+        if running_total > sanitize::MAX_TOTAL_UNCOMPRESSED {
+            return Err(PyErr::from(ApexZipError::Bounds(format!(
+                "requested entries exceed total uncompressed cap {}",
+                sanitize::MAX_TOTAL_UNCOMPRESSED
+            ))));
+        }
+        let mut bytes = Vec::with_capacity(zfile.size().min(16 * 1024 * 1024) as usize);
+        let mut limited = (&mut zfile).take(sanitize::MAX_ENTRY_UNCOMPRESSED + 1);
+        limited
+            .read_to_end(&mut bytes)
+            .map_err(ApexZipError::from)
+            .map_err(PyErr::from)?;
+        if bytes.len() as u64 > sanitize::MAX_ENTRY_UNCOMPRESSED {
+            return Err(PyErr::from(ApexZipError::Bounds(format!(
+                "entry {name} actual decompressed size exceeded per-entry cap {}",
+                sanitize::MAX_ENTRY_UNCOMPRESSED
+            ))));
+        }
+        dict.set_item(name, PyBytes::new(py, &bytes))?;
+    }
+
+    Ok(dict.into_any().unbind())
 }
 
 /// Extract a ZIP/APK to `dest_dir`, sanitizing every entry name and
@@ -90,7 +208,9 @@ fn read_entries(py: Python<'_>, apk_path: &str) -> PyResult<Vec<Py<PyAny>>> {
 fn extract_apk(py: Python<'_>, apk_path: &str, dest_dir: &str) -> PyResult<Py<PyAny>> {
     let mut archive = open_archive(apk_path).map_err(PyErr::from)?;
     let dest_root = PathBuf::from(dest_dir);
-    fs::create_dir_all(&dest_root).map_err(ApexZipError::from).map_err(PyErr::from)?;
+    fs::create_dir_all(&dest_root)
+        .map_err(ApexZipError::from)
+        .map_err(PyErr::from)?;
 
     let mut entries = Vec::with_capacity(archive.len());
     let mut running_total: u64 = 0;
@@ -194,6 +314,8 @@ fn extract_apk(py: Python<'_>, apk_path: &str, dest_dir: &str) -> PyResult<Py<Py
 #[pymodule]
 fn apex_zip_reader(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(read_entries, m)?)?;
+    m.add_function(wrap_pyfunction!(read_entries_columnar, m)?)?;
+    m.add_function(wrap_pyfunction!(read_entries_data, m)?)?;
     m.add_function(wrap_pyfunction!(extract_apk, m)?)?;
     Ok(())
 }

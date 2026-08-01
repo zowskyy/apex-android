@@ -11,7 +11,11 @@ pub const MAX_STRING_UTF16_LEN: u32 = 10_000_000;
 pub fn read_string_data_offsets(r: &DexReader, off: u32, count: u32) -> Result<Vec<u32>> {
     let count = count as usize;
     if count > MAX_STRING_IDS {
-        return Err(DexError::CountTooLarge { offset: off as usize, count, cap: MAX_STRING_IDS });
+        return Err(DexError::CountTooLarge {
+            offset: off as usize,
+            count,
+            cap: MAX_STRING_IDS,
+        });
     }
     let mut out = Vec::with_capacity(count.min(4096));
     let base = off as usize;
@@ -30,7 +34,11 @@ pub fn read_string_data_offsets(r: &DexReader, off: u32, count: u32) -> Result<V
 pub fn decode_mutf8_string(r: &DexReader, offset: u32) -> Result<String> {
     let (utf16_len, consumed) = r.uleb128_at(offset as usize)?;
     if utf16_len > MAX_STRING_UTF16_LEN {
-        return Err(DexError::CountTooLarge { offset: offset as usize, count: utf16_len as usize, cap: MAX_STRING_UTF16_LEN as usize });
+        return Err(DexError::CountTooLarge {
+            offset: offset as usize,
+            count: utf16_len as usize,
+            cap: MAX_STRING_UTF16_LEN as usize,
+        });
     }
     let mut pos = offset as usize + consumed;
     let mut units: Vec<u16> = Vec::with_capacity(utf16_len.min(4096) as usize);
@@ -60,9 +68,16 @@ pub fn decode_mutf8_string(r: &DexReader, offset: u32) -> Result<String> {
     Ok(String::from_utf16_lossy(&units))
 }
 
-pub fn read_all_strings(r: &DexReader, string_ids_off: u32, string_ids_size: u32) -> Result<Vec<String>> {
+pub fn read_all_strings(
+    r: &DexReader,
+    string_ids_off: u32,
+    string_ids_size: u32,
+) -> Result<Vec<String>> {
     let offsets = read_string_data_offsets(r, string_ids_off, string_ids_size)?;
-    offsets.into_iter().map(|off| decode_mutf8_string(r, off)).collect()
+    offsets
+        .into_iter()
+        .map(|off| decode_mutf8_string(r, off))
+        .collect()
 }
 
 /// type_ids is an array of `descriptor_idx: u32` (index into string_ids),
@@ -70,7 +85,11 @@ pub fn read_all_strings(r: &DexReader, string_ids_off: u32, string_ids_size: u32
 pub fn read_type_ids(r: &DexReader, off: u32, count: u32) -> Result<Vec<u32>> {
     let count = count as usize;
     if count > MAX_STRING_IDS {
-        return Err(DexError::CountTooLarge { offset: off as usize, count, cap: MAX_STRING_IDS });
+        return Err(DexError::CountTooLarge {
+            offset: off as usize,
+            count,
+            cap: MAX_STRING_IDS,
+        });
     }
     let mut out = Vec::with_capacity(count.min(4096));
     let base = off as usize;

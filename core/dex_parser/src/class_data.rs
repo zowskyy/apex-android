@@ -35,7 +35,11 @@ pub const MAX_MEMBERS_PER_LIST: u32 = 1_000_000;
 fn read_count(r: &DexReader, pos: &mut usize) -> Result<u32> {
     let (val, consumed) = r.uleb128_at(*pos)?;
     if val > MAX_MEMBERS_PER_LIST {
-        return Err(DexError::CountTooLarge { offset: *pos, count: val as usize, cap: MAX_MEMBERS_PER_LIST as usize });
+        return Err(DexError::CountTooLarge {
+            offset: *pos,
+            count: val as usize,
+            cap: MAX_MEMBERS_PER_LIST as usize,
+        });
     }
     *pos += consumed;
     Ok(val)
@@ -50,7 +54,10 @@ fn read_fields(r: &DexReader, pos: &mut usize, count: u32) -> Result<Vec<Encoded
         let (access_flags, c2) = r.uleb128_at(*pos)?;
         *pos += c2;
         running_idx = running_idx.wrapping_add(idx_diff);
-        out.push(EncodedField { field_idx: running_idx, access_flags });
+        out.push(EncodedField {
+            field_idx: running_idx,
+            access_flags,
+        });
     }
     Ok(out)
 }
@@ -66,7 +73,11 @@ fn read_methods(r: &DexReader, pos: &mut usize, count: u32) -> Result<Vec<Encode
         let (code_off, c3) = r.uleb128_at(*pos)?;
         *pos += c3;
         running_idx = running_idx.wrapping_add(idx_diff);
-        out.push(EncodedMethod { method_idx: running_idx, access_flags, code_off });
+        out.push(EncodedMethod {
+            method_idx: running_idx,
+            access_flags,
+            code_off,
+        });
     }
     Ok(out)
 }
