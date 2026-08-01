@@ -58,7 +58,10 @@ fn main_activity_has_oncreate_method_with_real_index() {
         .expect("MainActivity class_def present");
 
     // superclass must resolve to android.app.Activity
-    assert_eq!(dex.type_name(main_activity.superclass_idx), Some("Landroid/app/Activity;"));
+    assert_eq!(
+        dex.type_name(main_activity.superclass_idx),
+        Some("Landroid/app/Activity;")
+    );
 
     let data = dex.class_data(main_activity).expect("class_data parses");
     let method_names: Vec<&str> = data
@@ -93,7 +96,11 @@ fn every_method_instruction_width_sums_to_insns_len() {
 
     for def in &dex.class_defs {
         let data = dex.class_data(def).expect("class_data");
-        for m in data.direct_methods.iter().chain(data.virtual_methods.iter()) {
+        for m in data
+            .direct_methods
+            .iter()
+            .chain(data.virtual_methods.iter())
+        {
             if m.code_off == 0 {
                 continue; // abstract/native: no code_item
             }
@@ -105,18 +112,24 @@ fn every_method_instruction_width_sums_to_insns_len() {
                     CodeUnit::PackedSwitchPayload { targets, .. } => 4 + 2 * targets.len() as u32,
                     CodeUnit::SparseSwitchPayload { keys, .. } => 2 + 4 * keys.len() as u32,
                     // ident(1) + element_width(1) + size(2) + ceil(data_bytes/2)
-                    CodeUnit::FillArrayDataPayload { data, .. } => 4 + (data.len() as u32).div_ceil(2),
+                    CodeUnit::FillArrayDataPayload { data, .. } => {
+                        4 + (data.len() as u32).div_ceil(2)
+                    }
                 })
                 .sum();
             assert_eq!(
-                width_sum, item.insns.len() as u32,
+                width_sum,
+                item.insns.len() as u32,
                 "method_idx={} decoded width sum != insns_size (desync)",
                 m.method_idx
             );
             methods_checked += 1;
         }
     }
-    assert!(methods_checked >= 8, "expected at least 8 methods with code across the fixture, found {methods_checked}");
+    assert!(
+        methods_checked >= 8,
+        "expected at least 8 methods with code across the fixture, found {methods_checked}"
+    );
 }
 
 #[test]
@@ -153,13 +166,21 @@ fn oncreate_decodes_to_expected_real_bytecode_shape() {
         })
         .collect();
 
-    assert_eq!(insns.len(), 4, "expected exactly 4 real instructions in onCreate, got {insns:?}");
+    assert_eq!(
+        insns.len(),
+        4,
+        "expected exactly 4 real instructions in onCreate, got {insns:?}"
+    );
     assert_eq!((insns[0].opcode, insns[0].format), (0x6f, Format::F35c)); // invoke-super
     assert_eq!((insns[1].opcode, insns[1].format), (0x15, Format::F21h)); // const/high16
-    // Top 32 bits of the 21h literal are the real resource ID; AAPT's
-    // convention for app-local resources is a 0x7f package prefix.
+                                                                          // Top 32 bits of the 21h literal are the real resource ID; AAPT's
+                                                                          // convention for app-local resources is a 0x7f package prefix.
     let resource_id = (insns[1].literal.unwrap() >> 32) as u32;
-    assert_eq!(resource_id >> 24, 0x7f, "expected AAPT app-local resource-id prefix 0x7f, got 0x{resource_id:08x}");
+    assert_eq!(
+        resource_id >> 24,
+        0x7f,
+        "expected AAPT app-local resource-id prefix 0x7f, got 0x{resource_id:08x}"
+    );
     assert_eq!((insns[2].opcode, insns[2].format), (0x6e, Format::F35c)); // invoke-virtual
     assert_eq!((insns[3].opcode, insns[3].format), (0x0e, Format::F10x)); // return-void
 
@@ -205,8 +226,16 @@ fn every_class_data_offset_parses_without_desync() {
     // sane (small) member count.
     let dex = apex_dex_parser::parse(CLASSES_DEX).expect("parse");
     for def in &dex.class_defs {
-        let data = dex.class_data(def).expect("class_data_off should be valid for every real class_def");
-        let total = data.static_fields.len() + data.instance_fields.len() + data.direct_methods.len() + data.virtual_methods.len();
-        assert!(total < 50, "class had implausibly many members ({total}) — likely a parser desync");
+        let data = dex
+            .class_data(def)
+            .expect("class_data_off should be valid for every real class_def");
+        let total = data.static_fields.len()
+            + data.instance_fields.len()
+            + data.direct_methods.len()
+            + data.virtual_methods.len();
+        assert!(
+            total < 50,
+            "class had implausibly many members ({total}) — likely a parser desync"
+        );
     }
 }

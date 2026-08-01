@@ -27,7 +27,11 @@ pub const MAX_CLASS_DEFS: usize = 2_000_000;
 pub fn parse_class_defs(r: &DexReader, off: u32, count: u32) -> Result<Vec<ClassDef>> {
     let count = count as usize;
     if count > MAX_CLASS_DEFS {
-        return Err(DexError::CountTooLarge { offset: off as usize, count, cap: MAX_CLASS_DEFS });
+        return Err(DexError::CountTooLarge {
+            offset: off as usize,
+            count,
+            cap: MAX_CLASS_DEFS,
+        });
     }
     let mut defs = Vec::with_capacity(count.min(4096));
     let base = off as usize;

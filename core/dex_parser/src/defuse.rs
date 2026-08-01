@@ -46,10 +46,16 @@ fn none() -> DefUse {
     DefUse::default()
 }
 fn def(regs: Vec<u16>) -> DefUse {
-    DefUse { defs: regs, uses: Vec::new() }
+    DefUse {
+        defs: regs,
+        uses: Vec::new(),
+    }
 }
 fn uses_only(regs: Vec<u16>) -> DefUse {
-    DefUse { defs: Vec::new(), uses: regs }
+    DefUse {
+        defs: Vec::new(),
+        uses: regs,
+    }
 }
 fn def_uses(defs: Vec<u16>, uses: Vec<u16>) -> DefUse {
     DefUse { defs, uses }
@@ -67,30 +73,30 @@ pub fn def_use(insn: &Instruction) -> DefUse {
         0x01..=0x03 => def_uses(n(r[0]), n(r[1])), // move, move/from16, move/16
         0x04..=0x06 => def_uses(w(r[0]), w(r[1])), // move-wide (+from16/16)
         0x07..=0x09 => def_uses(n(r[0]), n(r[1])), // move-object (+from16/16)
-        0x0a => def(n(r[0])),                              // move-result
-        0x0b => def(w(r[0])),                               // move-result-wide
-        0x0c => def(n(r[0])),                               // move-result-object
-        0x0d => def(n(r[0])),                               // move-exception
-        0x0e => none(),                                     // return-void
-        0x0f | 0x11 => uses_only(n(r[0])),                  // return, return-object
-        0x10 => uses_only(w(r[0])),                         // return-wide
+        0x0a => def(n(r[0])),                      // move-result
+        0x0b => def(w(r[0])),                      // move-result-wide
+        0x0c => def(n(r[0])),                      // move-result-object
+        0x0d => def(n(r[0])),                      // move-exception
+        0x0e => none(),                            // return-void
+        0x0f | 0x11 => uses_only(n(r[0])),         // return, return-object
+        0x10 => uses_only(w(r[0])),                // return-wide
 
         // --- const family (all defs, no uses) ---
         0x12..=0x15 => def(n(r[0])), // const/4, const/16, const, const/high16
         0x16..=0x19 => def(w(r[0])), // const-wide/16, /32, const-wide, /high16
-        0x1a..=0x1c => def(n(r[0])),        // const-string(+jumbo), const-class
+        0x1a..=0x1c => def(n(r[0])), // const-string(+jumbo), const-class
 
-        0x1d | 0x1e => uses_only(n(r[0])), // monitor-enter/exit
-        0x1f => uses_only(n(r[0])),        // check-cast: verifies in place, defines nothing
-        0x20 => def_uses(n(r[0]), n(r[1])), // instance-of
-        0x21 => def_uses(n(r[0]), n(r[1])), // array-length
-        0x22 => def(n(r[0])),               // new-instance
-        0x23 => def_uses(n(r[0]), n(r[1])), // new-array: vA = new T[vB]
+        0x1d | 0x1e => uses_only(n(r[0])),   // monitor-enter/exit
+        0x1f => uses_only(n(r[0])),          // check-cast: verifies in place, defines nothing
+        0x20 => def_uses(n(r[0]), n(r[1])),  // instance-of
+        0x21 => def_uses(n(r[0]), n(r[1])),  // array-length
+        0x22 => def(n(r[0])),                // new-instance
+        0x23 => def_uses(n(r[0]), n(r[1])),  // new-array: vA = new T[vB]
         0x24 | 0x25 => uses_only(r.clone()), // filled-new-array(-range): result via move-result-object
-        0x26 => uses_only(n(r[0])),         // fill-array-data
-        0x27 => uses_only(n(r[0])),         // throw
-        0x28..=0x2a => none(),       // goto, goto/16, goto/32
-        0x2b | 0x2c => uses_only(n(r[0])),  // packed-switch, sparse-switch
+        0x26 => uses_only(n(r[0])),          // fill-array-data
+        0x27 => uses_only(n(r[0])),          // throw
+        0x28..=0x2a => none(),               // goto, goto/16, goto/32
+        0x2b | 0x2c => uses_only(n(r[0])),   // packed-switch, sparse-switch
 
         // --- compares: cmpl/cmpg-float narrow, cmpl/cmpg-double + cmp-long wide ---
         0x2d | 0x2e => def_uses(n(r[0]), [n(r[1]), n(r[2])].concat()),
@@ -124,7 +130,7 @@ pub fn def_use(insn: &Instruction) -> DefUse {
         0x6e..=0x72 => uses_only(r.clone()), // invoke-virtual/super/direct/static/interface
         0x73 => none(),                      // unused
         0x74..=0x78 => uses_only(r.clone()), // invoke-*/range
-        0x79 | 0x7a => none(),                // unused
+        0x79 | 0x7a => none(),               // unused
 
         // --- unary ops (F12x): vA = op(vB) ---
         0x7b | 0x7c => def_uses(n(r[0]), n(r[1])), // neg-int, not-int
@@ -183,7 +189,15 @@ mod tests {
     use crate::opcode::Format;
 
     fn insn(opcode: u8, format: Format, registers: Vec<u16>) -> Instruction {
-        Instruction { code_unit_offset: 0, opcode, format, registers, literal: None, branch_offset: None, index: None }
+        Instruction {
+            code_unit_offset: 0,
+            opcode,
+            format,
+            registers,
+            literal: None,
+            branch_offset: None,
+            index: None,
+        }
     }
 
     #[test]
@@ -204,7 +218,11 @@ mod tests {
     fn binop_2addr_int_reads_and_writes_a_uses_b() {
         let du = def_use(&insn(0xb0, Format::F12x, vec![1, 2])); // add-int/2addr v1, v2 (v1 = v1+v2)
         assert_eq!(du.defs, vec![1]);
-        assert_eq!(du.uses, vec![1, 2], "the destination is also read: vA = vA op vB");
+        assert_eq!(
+            du.uses,
+            vec![1, 2],
+            "the destination is also read: vA = vA op vB"
+        );
     }
 
     #[test]
@@ -218,7 +236,11 @@ mod tests {
     fn shl_long_2addr_shift_amount_is_narrow_not_wide() {
         let du = def_use(&insn(0xc3, Format::F12x, vec![2, 6])); // shl-long/2addr v2, v6
         assert_eq!(du.defs, vec![2, 3]);
-        assert_eq!(du.uses, vec![2, 3, 6], "shift amount (v6) is a plain int, not a pair");
+        assert_eq!(
+            du.uses,
+            vec![2, 3, 6],
+            "shift amount (v6) is a plain int, not a pair"
+        );
     }
 
     #[test]
@@ -232,7 +254,11 @@ mod tests {
     fn iput_wide_expands_only_the_value_operand() {
         let du = def_use(&insn(0x5a, Format::F22c, vec![1, 5])); // iput-wide v1, v5, field
         assert!(du.defs.is_empty());
-        assert_eq!(du.uses, vec![1, 2, 5], "value (v1) is wide; object ref (v5) is not");
+        assert_eq!(
+            du.uses,
+            vec![1, 2, 5],
+            "value (v1) is wide; object ref (v5) is not"
+        );
     }
 
     #[test]
@@ -282,7 +308,10 @@ mod tests {
     #[test]
     fn quickened_range_is_conservatively_use_only() {
         let du = def_use(&insn(0xe3, Format::F22cs, vec![1, 2]));
-        assert!(du.defs.is_empty(), "unverified split of iget-quick vs iput-quick; must not guess a def");
+        assert!(
+            du.defs.is_empty(),
+            "unverified split of iget-quick vs iput-quick; must not guess a def"
+        );
         assert_eq!(du.uses, vec![1, 2]);
     }
 }

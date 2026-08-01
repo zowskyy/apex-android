@@ -14,8 +14,15 @@ impl<'a> DexReader<'a> {
     }
 
     fn check(&self, offset: usize, needed: usize) -> Result<()> {
-        if offset.checked_add(needed).is_none_or(|end| end > self.data.len()) {
-            return Err(DexError::Truncated { offset, needed, len: self.data.len() });
+        if offset
+            .checked_add(needed)
+            .is_none_or(|end| end > self.data.len())
+        {
+            return Err(DexError::Truncated {
+                offset,
+                needed,
+                len: self.data.len(),
+            });
         }
         Ok(())
     }

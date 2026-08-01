@@ -4,8 +4,8 @@
 //! `data_type`; only `TYPE_STRING` (a global-string-pool index) is resolved
 //! by this crate today, matching what's exercised by the fixture.
 
-use crate::reader::ArscReader;
 use crate::error::Result;
+use crate::reader::ArscReader;
 
 pub const TYPE_NULL: u8 = 0x00;
 pub const TYPE_REFERENCE: u8 = 0x01;

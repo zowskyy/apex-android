@@ -31,11 +31,19 @@ pub struct SanitizeResult {
 
 impl SanitizeResult {
     fn clean(name: String) -> Self {
-        Self { verdict: Verdict::Clean, sanitized_name: Some(name), reason: None }
+        Self {
+            verdict: Verdict::Clean,
+            sanitized_name: Some(name),
+            reason: None,
+        }
     }
 
     fn warn(reason: &str) -> Self {
-        Self { verdict: Verdict::Warn, sanitized_name: None, reason: Some(reason.to_string()) }
+        Self {
+            verdict: Verdict::Warn,
+            sanitized_name: None,
+            reason: Some(reason.to_string()),
+        }
     }
 }
 

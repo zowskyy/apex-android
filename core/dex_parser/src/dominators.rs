@@ -67,7 +67,11 @@ pub fn immediate_dominators(cfg: &ControlFlowGraph, rpo: &[u32]) -> HashMap<u32,
     }
     idom.insert(ENTRY, ENTRY);
 
-    let intersect = |mut u: u32, mut v: u32, idom: &HashMap<u32, u32>, rpo_index: &HashMap<u32, usize>| -> u32 {
+    let intersect = |mut u: u32,
+                     mut v: u32,
+                     idom: &HashMap<u32, u32>,
+                     rpo_index: &HashMap<u32, usize>|
+     -> u32 {
         while u != v {
             while rpo_index[&u] > rpo_index[&v] {
                 u = idom[&u];
@@ -85,7 +89,9 @@ pub fn immediate_dominators(cfg: &ControlFlowGraph, rpo: &[u32]) -> HashMap<u32,
         for &b in rpo.iter().skip(1) {
             let preds = &cfg.blocks[b as usize].predecessors;
             let mut processed_preds = preds.iter().copied().filter(|p| idom.contains_key(p));
-            let Some(first) = processed_preds.next() else { continue };
+            let Some(first) = processed_preds.next() else {
+                continue;
+            };
             let mut new_idom = first;
             for p in processed_preds {
                 new_idom = intersect(new_idom, p, &idom, &rpo_index);
@@ -104,7 +110,10 @@ pub fn immediate_dominators(cfg: &ControlFlowGraph, rpo: &[u32]) -> HashMap<u32,
 /// where `b`'s dominance ends but control can still reach directly from
 /// somewhere `b` dominates — exactly where a phi for a value defined at (or
 /// dominated by) `b` must be placed to merge with values from other paths.
-pub fn dominance_frontiers(cfg: &ControlFlowGraph, idom: &HashMap<u32, u32>) -> HashMap<u32, HashSet<u32>> {
+pub fn dominance_frontiers(
+    cfg: &ControlFlowGraph,
+    idom: &HashMap<u32, u32>,
+) -> HashMap<u32, HashSet<u32>> {
     let mut df: HashMap<u32, HashSet<u32>> = idom.keys().map(|&b| (b, HashSet::new())).collect();
 
     for &b in idom.keys() {
@@ -156,7 +165,15 @@ mod tests {
     use crate::opcode::Format;
 
     fn insn(offset: u32, opcode: u8, format: Format, branch_offset: Option<i32>) -> Instruction {
-        Instruction { code_unit_offset: offset, opcode, format, registers: Vec::new(), literal: None, branch_offset, index: None }
+        Instruction {
+            code_unit_offset: offset,
+            opcode,
+            format,
+            registers: Vec::new(),
+            literal: None,
+            branch_offset,
+            index: None,
+        }
     }
 
     /// Same if/else diamond as cfg.rs's test: entry -> {then, else} -> join.
@@ -186,12 +203,18 @@ mod tests {
 
         assert_eq!(idom[&then_b], entry);
         assert_eq!(idom[&else_b], entry);
-        assert_eq!(idom[&join], entry, "join is dominated by entry, not by either branch alone");
+        assert_eq!(
+            idom[&join], entry,
+            "join is dominated by entry, not by either branch alone"
+        );
 
         let df = dominance_frontiers(&cfg, &idom);
         assert_eq!(df[&then_b], HashSet::from([join]));
         assert_eq!(df[&else_b], HashSet::from([join]));
-        assert!(df[&entry].is_empty(), "entry dominates the whole graph, so it has no dominance frontier");
+        assert!(
+            df[&entry].is_empty(),
+            "entry dominates the whole graph, so it has no dominance frontier"
+        );
         assert!(df[&join].is_empty());
     }
 
@@ -201,7 +224,7 @@ mod tests {
     #[test]
     fn self_loop_is_own_dominance_frontier() {
         let units = vec![
-            CodeUnit::Insn(insn(0, 0x00, Format::F10x, None)),     // nop
+            CodeUnit::Insn(insn(0, 0x00, Format::F10x, None)), // nop
             CodeUnit::Insn(insn(1, 0x28, Format::F10t, Some(-1))), // goto -1 -> 0
         ];
         let cfg = build_cfg(&units);

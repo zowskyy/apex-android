@@ -62,9 +62,14 @@ fn decode_utf16_string(r: &ArscReader, data_start: usize) -> Result<(String, usi
         (lo as u32, data_start + 2)
     };
     let len = len as usize;
-    let cap = len.checked_mul(2).ok_or(ArscError::MalformedStringEntry(data_start))?;
+    let cap = len
+        .checked_mul(2)
+        .ok_or(ArscError::MalformedStringEntry(data_start))?;
     let bytes = r.bytes_at(pos, cap)?;
-    let units: Vec<u16> = bytes.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+    let units: Vec<u16> = bytes
+        .chunks_exact(2)
+        .map(|c| u16::from_le_bytes([c[0], c[1]]))
+        .collect();
     let s = String::from_utf16(&units).map_err(|_| ArscError::InvalidUtf16(data_start))?;
     pos += cap;
     Ok((s, pos))
@@ -76,7 +81,11 @@ fn decode_utf8_string(r: &ArscReader, data_start: usize) -> Result<(String, usiz
     // normally, 2 bytes if the high bit of the first byte is set.
     let skip_len_field = |offset: usize| -> Result<usize> {
         let b0 = r.u8_at(offset)?;
-        Ok(if b0 & 0x80 != 0 { offset + 2 } else { offset + 1 })
+        Ok(if b0 & 0x80 != 0 {
+            offset + 2
+        } else {
+            offset + 1
+        })
     };
     let after_utf16_hint = skip_len_field(data_start)?;
     let b0 = r.u8_at(after_utf16_hint)?;
@@ -87,7 +96,9 @@ fn decode_utf8_string(r: &ArscReader, data_start: usize) -> Result<(String, usiz
         (b0 as usize, after_utf16_hint + 1)
     };
     let bytes = r.bytes_at(pos, len)?;
-    let s = std::str::from_utf8(bytes).map_err(|_| ArscError::InvalidUtf8(data_start))?.to_string();
+    let s = std::str::from_utf8(bytes)
+        .map_err(|_| ArscError::InvalidUtf8(data_start))?
+        .to_string();
     pos += len;
     Ok((s, pos))
 }
@@ -97,7 +108,10 @@ fn decode_utf8_string(r: &ArscReader, data_start: usize) -> Result<(String, usiz
 pub fn parse_string_pool(r: &ArscReader, offset: usize) -> Result<StringPool> {
     let header = read_chunk_header(r, offset)?;
     if header.chunk_type != RES_STRING_POOL_TYPE {
-        return Err(ArscError::NotAStringPool { offset, got: header.chunk_type });
+        return Err(ArscError::NotAStringPool {
+            offset,
+            got: header.chunk_type,
+        });
     }
 
     let string_count = r.u32_at(offset + CHUNK_HEADER_SIZE)?;
@@ -107,8 +121,16 @@ pub fn parse_string_pool(r: &ArscReader, offset: usize) -> Result<StringPool> {
     let styles_start = r.u32_at(offset + CHUNK_HEADER_SIZE + 16)?;
 
     if string_count > MAX_STRING_COUNT || style_count > MAX_STRING_COUNT {
-        let (count, cap) = if string_count > MAX_STRING_COUNT { (string_count, MAX_STRING_COUNT) } else { (style_count, MAX_STRING_COUNT) };
-        return Err(ArscError::CountTooLarge { offset, count: count as usize, cap: cap as usize });
+        let (count, cap) = if string_count > MAX_STRING_COUNT {
+            (string_count, MAX_STRING_COUNT)
+        } else {
+            (style_count, MAX_STRING_COUNT)
+        };
+        return Err(ArscError::CountTooLarge {
+            offset,
+            count: count as usize,
+            cap: cap as usize,
+        });
     }
 
     let utf8 = flags & UTF8_FLAG != 0;
@@ -119,7 +141,11 @@ pub fn parse_string_pool(r: &ArscReader, offset: usize) -> Result<StringPool> {
     for i in 0..string_count as usize {
         let rel = r.u32_at(string_offsets_base + i * 4)?;
         let data_start = offset + strings_start as usize + rel as usize;
-        let (s, _) = if utf8 { decode_utf8_string(r, data_start)? } else { decode_utf16_string(r, data_start)? };
+        let (s, _) = if utf8 {
+            decode_utf8_string(r, data_start)?
+        } else {
+            decode_utf16_string(r, data_start)?
+        };
         strings.push(s);
     }
 
@@ -135,7 +161,11 @@ pub fn parse_string_pool(r: &ArscReader, offset: usize) -> Result<StringPool> {
             }
             let first_char = r.u32_at(pos + 4)?;
             let last_char = r.u32_at(pos + 8)?;
-            spans.push(Span { name, first_char, last_char });
+            spans.push(Span {
+                name,
+                first_char,
+                last_char,
+            });
             pos += 12;
         }
         // The style-offset table is indexed by *string* index (only
@@ -151,12 +181,21 @@ pub fn parse_string_pool(r: &ArscReader, offset: usize) -> Result<StringPool> {
         }
     }
 
-    Ok(StringPool { strings, styles, chunk_size: header.size })
+    Ok(StringPool {
+        strings,
+        styles,
+        chunk_size: header.size,
+    })
 }
 
 impl StringPool {
     pub fn get(&self, index: u32) -> Result<&str> {
-        self.strings.get(index as usize).map(String::as_str).ok_or(ArscError::StringIndexOutOfRange { index, count: self.strings.len() })
+        self.strings.get(index as usize).map(String::as_str).ok_or(
+            ArscError::StringIndexOutOfRange {
+                index,
+                count: self.strings.len(),
+            },
+        )
     }
 }
 
@@ -225,6 +264,9 @@ mod tests {
         buf.extend_from_slice(&0u32.to_le_bytes());
 
         let r = ArscReader::new(&buf);
-        assert!(matches!(parse_string_pool(&r, 0), Err(ArscError::CountTooLarge { .. })));
+        assert!(matches!(
+            parse_string_pool(&r, 0),
+            Err(ArscError::CountTooLarge { .. })
+        ));
     }
 }

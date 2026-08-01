@@ -53,18 +53,30 @@ pub struct TypeSpec {
 pub fn parse_type_spec(r: &ArscReader, offset: usize) -> Result<TypeSpec> {
     let header = read_chunk_header(r, offset)?;
     if header.chunk_type != RES_TABLE_TYPE_SPEC_TYPE {
-        return Err(ArscError::UnexpectedChunkType { offset, expected: RES_TABLE_TYPE_SPEC_TYPE, got: header.chunk_type });
+        return Err(ArscError::UnexpectedChunkType {
+            offset,
+            expected: RES_TABLE_TYPE_SPEC_TYPE,
+            got: header.chunk_type,
+        });
     }
     let id = r.u8_at(offset + 8)?;
     let entry_count = r.u32_at(offset + 12)?;
     if entry_count > MAX_ENTRY_COUNT {
-        return Err(ArscError::CountTooLarge { offset, count: entry_count as usize, cap: MAX_ENTRY_COUNT as usize });
+        return Err(ArscError::CountTooLarge {
+            offset,
+            count: entry_count as usize,
+            cap: MAX_ENTRY_COUNT as usize,
+        });
     }
     let mut entry_flags = Vec::with_capacity(entry_count as usize);
     for i in 0..entry_count as usize {
         entry_flags.push(r.u32_at(offset + 16 + i * 4)?);
     }
-    Ok(TypeSpec { id, entry_flags, chunk_size: header.size })
+    Ok(TypeSpec {
+        id,
+        entry_flags,
+        chunk_size: header.size,
+    })
 }
 
 #[derive(Debug, Clone)]
@@ -98,13 +110,21 @@ fn parse_resource_entry(r: &ArscReader, entry_offset: usize) -> Result<ResourceE
 
     if flags & FLAG_COMPLEX == 0 {
         let (value, _) = read_value(r, entry_offset + size as usize)?;
-        return Ok(ResourceEntry { key_index, flags, value: EntryValue::Simple(value) });
+        return Ok(ResourceEntry {
+            key_index,
+            flags,
+            value: EntryValue::Simple(value),
+        });
     }
 
     let parent = r.u32_at(entry_offset + 8)?;
     let count = r.u32_at(entry_offset + 12)?;
     if count > MAX_MAP_COUNT {
-        return Err(ArscError::CountTooLarge { offset: entry_offset, count: count as usize, cap: MAX_MAP_COUNT as usize });
+        return Err(ArscError::CountTooLarge {
+            offset: entry_offset,
+            count: count as usize,
+            cap: MAX_MAP_COUNT as usize,
+        });
     }
     let mut entries = Vec::with_capacity(count as usize);
     let mut p = entry_offset + size as usize;
@@ -114,7 +134,11 @@ fn parse_resource_entry(r: &ArscReader, entry_offset: usize) -> Result<ResourceE
         entries.push(MapEntry { name, value });
         p = next;
     }
-    Ok(ResourceEntry { key_index, flags, value: EntryValue::Complex { parent, entries } })
+    Ok(ResourceEntry {
+        key_index,
+        flags,
+        value: EntryValue::Complex { parent, entries },
+    })
 }
 
 #[derive(Debug, Clone)]
@@ -134,7 +158,11 @@ pub struct TypeChunk {
 pub fn parse_type_chunk(r: &ArscReader, offset: usize) -> Result<TypeChunk> {
     let header = read_chunk_header(r, offset)?;
     if header.chunk_type != RES_TABLE_TYPE_TYPE {
-        return Err(ArscError::UnexpectedChunkType { offset, expected: RES_TABLE_TYPE_TYPE, got: header.chunk_type });
+        return Err(ArscError::UnexpectedChunkType {
+            offset,
+            expected: RES_TABLE_TYPE_TYPE,
+            got: header.chunk_type,
+        });
     }
     let id = r.u8_at(offset + 8)?;
     let flags = r.u8_at(offset + 9)?;
@@ -144,7 +172,11 @@ pub fn parse_type_chunk(r: &ArscReader, offset: usize) -> Result<TypeChunk> {
     let entry_count = r.u32_at(offset + 12)?;
     let entries_start = r.u32_at(offset + 16)?;
     if entry_count > MAX_ENTRY_COUNT {
-        return Err(ArscError::CountTooLarge { offset, count: entry_count as usize, cap: MAX_ENTRY_COUNT as usize });
+        return Err(ArscError::CountTooLarge {
+            offset,
+            count: entry_count as usize,
+            cap: MAX_ENTRY_COUNT as usize,
+        });
     }
 
     let config_len = header.header_size as usize - 20;
@@ -173,7 +205,12 @@ pub fn parse_type_chunk(r: &ArscReader, offset: usize) -> Result<TypeChunk> {
         }
     }
 
-    Ok(TypeChunk { id, config, entries, chunk_size: header.size })
+    Ok(TypeChunk {
+        id,
+        config,
+        entries,
+        chunk_size: header.size,
+    })
 }
 
 impl TypeChunk {
@@ -185,6 +222,8 @@ impl TypeChunk {
         // (e.g. 64 for the modern `ResTable_config`), which is never zero —
         // only the qualifier bytes *after* it indicate an actual
         // locale/density/screen/etc. qualifier.
-        self.config.get(4..).is_some_and(|qualifiers| qualifiers.iter().all(|&b| b == 0))
+        self.config
+            .get(4..)
+            .is_some_and(|qualifiers| qualifiers.iter().all(|&b| b == 0))
     }
 }

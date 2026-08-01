@@ -1,6 +1,6 @@
 # PROJECT_STATE.md — APEX
 
-## Current Phase: Phase 1 — Read-Only Analysis (in progress)
+## Current Phase: Phase 1 — Read-Only Analysis (complete on `cursor/complete-apex-2eb0`)
 
 ## Completed Slices
 - 0.3 — Core engine + 10-test suite, all passing on Windows (commit 9703652)
@@ -11,6 +11,16 @@
   CLEAN/WARN verdict per entry. Replaces `zipfile.extractall()` in
   `apex/__init__.py:extract_apk()` (native path, with a pure-Python fallback
   mirroring the same checks if the extension isn't installed).
+- 1.3 — Android binary XML decoder + PyO3 bridge in `core/arsc_parser`:
+  `decode_axml`, `axml_strings`, `is_binary_xml`, and `scan_string_pools`
+  expose native manifest/resource XML decoding to Python. The CLI uses this
+  path for manifest metadata, in-place XML decoding during `apex decode`, and
+  string scanning during `apex security-scan`.
+- 1.4 — Fast CLI inspection path: `apex inspect` scans ZIP central-directory
+  metadata with the columnar native ZIP API and reads only
+  `AndroidManifest.xml`, `resources.arsc`, and the first DEX into memory.
+  Real-corpus short benchmark: F-Droid 64.3ms engine time, NewPipe 69.8ms
+  engine time; both pass the <100ms target.
 - Tooling: `tools/mobile_test_app/` builds a real, installable, debug-signed
   Android APK via the actual SDK toolchain (aapt2/javac/d8/zipalign/apksigner
   — all present locally under `%LOCALAPPDATA%\Android\Sdk` and Android
@@ -22,7 +32,7 @@
   `tools/mobile_test_app/README.md`.
 
 - 1.5 (structural parsing + real instruction decoding; IR/CFG still open) —
-  `core/dex_parser` (rlib `apex_dex_parser`, not yet PyO3-bridged): DEX
+  `core/dex_parser` (rlib/PyO3 module `apex_dex_parser`): DEX
   header (all 23 fields, correct offsets), string pool (MUTF-8 decode),
   type_ids, class_defs (all 8 fields), class_data_item (ULEB128,
   delta-encoded field/method indices), code_item parsing, and a real
@@ -150,8 +160,14 @@
     confirming the value is genuinely loop-carried, not just structurally
     present). Clippy clean (`-D warnings`). Whole workspace: 42 Rust tests
     passing (20 prior + 14 defuse + 3 dominators + 5 ssa).
-- 1.2 (complete) — `core/arsc_parser` (rlib `apex_arsc_parser`, not yet
-  PyO3-bridged): resources.arsc structural parser — table header, string
+- 1.7 — Native DEX-to-Java emitter + CLI integration: `apex_dex_parser`
+  exposes `decompile_dex`, and `apex decompile` / `apex decode` write Java
+  output under `java/`. Full-DEX decompilation now builds the resource map once
+  and shares it across a Rayon `par_iter`, avoiding the previous O(N^2)
+  resource-map rebuild. NewPipe first DEX (7,830 classes) writes Java in 1.29s
+  in the short benchmark.
+- 1.2 (complete) — `core/arsc_parser` (rlib/PyO3 module
+  `apex_arsc_parser`): resources.arsc structural parser — table header, string
   pools (both UTF-8 and UTF-16 encodings, plus style-span parsing for
   formatted strings like `Hello <b>World</b>!`), package chunk (both the
   legacy and modern/`typeIdOffset` `ResTable_package` header sizes),
@@ -204,20 +220,19 @@
   arsc_parser).
 
 ## Next Slice
-1.3 (binary XML decoder, `core/manifest_decoder` per the blueprint) is the
-one remaining open Phase-1 read-only-analysis slice before `apex inspect`
-(1.4) becomes buildable — it shares the string-pool format 1.2 just built
-(binary XML files embed the same `ResStringPool` chunk for their tag/
-attribute-value strings), so `core/arsc_parser::string_pool` should be
-reused rather than re-implemented. The `resources.arsc`-fixture aapt2
-toolchain path (`pip install aapt2`) is already proven and can produce a
-real compiled binary `AndroidManifest.xml` the same way. After that, wire
-`ssa::build_ssa` output into an actual IR->Java emitter (the still-open
-"Slice 1.7" mentioned in the 1.5 note above), since instructions/CFG/
-def-use/SSA are now all real.
+Phase 2 compatibility and fidelity work:
+- Improve resource value resolution so manifest/resource references round-trip
+  with fewer unresolved framework/app IDs than apktool's manifest-only path.
+- Broaden Java emitter fidelity beyond structural pseudocode, especially
+  control-flow shaping, exception handlers, annotations, Kotlin metadata, and
+  higher-level expression recovery.
+- Add multi-DEX/package-wide decompile benchmarks once the VM can complete
+  full two-APK jadx/apktool runs without terminating the pod.
 
 ## Blockers
-- None.
+- Full two-APK jadx/apktool benchmarking terminated the Cursor Cloud pod in the
+  first attempt. `docs/BENCHMARKS.md` records the requested short benchmark
+  suite instead.
 
 ## Known Gaps / Follow-ups
 - **Slice 0.1 (Cargo workspace scaffold) was never done as its own slice** —
@@ -246,15 +261,12 @@ def-use/SSA are now all real.
     the extraction root.
 
 ## Test Corpus
-- F-Droid client v1023051 (12.4MB) — round-trip PASS baseline
-- NewPipe v0.28.8 (10.9MB) — framework-version FAIL baseline
-- **Neither real APK file is present in this repo checkout.** In its place,
-  `scripts/generate_test_apk.py` builds a deterministic, locally-generated
-  APK-shaped fixture (`tests/fixtures/sample_test.apk`, gitignored, built
-  on demand by the pytest suite) at comparable scale to the F-Droid
-  baseline. It is a reasonable stand-in for structure/entry-count-shaped
-  testing but is not a substitute for the real corpus for round-trip or
-  framework-compatibility slices (2.x) — those need the actual APKs.
+- F-Droid client (`benchmarks/corpus/fdroid_latest.apk`, 11.9MB) — downloaded
+  from `https://f-droid.org/F-Droid.apk` for local benchmarks; gitignored.
+- NewPipe v0.28.8 (`benchmarks/corpus/newpipe_v0.28.8.apk`, 10.4MB) —
+  downloaded from the upstream release for local benchmarks; gitignored.
+- `scripts/generate_test_apk.py` still builds the deterministic local fixture
+  used by pytest for repository-contained tests.
 
 ## Pending Decision: Kotlin / R8-obfuscation support
 Not yet integrated, but scoped: `android-reverse-engineering-skill`

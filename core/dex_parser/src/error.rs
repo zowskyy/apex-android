@@ -4,7 +4,11 @@ pub enum DexError {
     TooLarge(usize),
 
     #[error("truncated DEX: needed {needed} bytes at offset {offset}, file is {len} bytes")]
-    Truncated { offset: usize, needed: usize, len: usize },
+    Truncated {
+        offset: usize,
+        needed: usize,
+        len: usize,
+    },
 
     #[error("bad magic: expected DEX magic, got {0:?}")]
     BadMagic([u8; 8]),
@@ -13,7 +17,11 @@ pub enum DexError {
     UnsupportedEndian(u32),
 
     #[error("count {count} at offset {offset} exceeds bounded-allocation cap {cap}")]
-    CountTooLarge { offset: usize, count: usize, cap: usize },
+    CountTooLarge {
+        offset: usize,
+        count: usize,
+        cap: usize,
+    },
 
     #[error("malformed uleb128 at offset {0}: too many continuation bytes")]
     MalformedUleb128(usize),

@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
 *.pyo
+.venv/
 .pytest_cache/
 apex_out/
 work/
@@ -12,5 +13,8 @@ build/
 target/
 *.pyd
 tests/fixtures/
+benchmarks/corpus/
+benchmarks/tools/
+benchmarks/results/
 tools/mobile_test_app/build/
 tools/mobile_test_app/debug.keystore

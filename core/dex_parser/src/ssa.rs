@@ -85,12 +85,19 @@ fn entry_value(vreg: u16) -> SsaValue {
 fn fresh(vreg: u16, counters: &mut HashMap<u16, u32>) -> SsaValue {
     let counter = counters.entry(vreg).or_insert(0);
     *counter += 1;
-    SsaValue { vreg, version: *counter }
+    SsaValue {
+        vreg,
+        version: *counter,
+    }
 }
 
 /// Cytron et al. minimal-SSA phi placement: for every register, insert a
 /// phi at every block in the iterated dominance frontier of its def sites.
-fn place_phis(cfg: &ControlFlowGraph, df: &HashMap<u32, std::collections::HashSet<u32>>, reachable: &std::collections::HashSet<u32>) -> HashMap<u32, SsaBlock> {
+fn place_phis(
+    cfg: &ControlFlowGraph,
+    df: &HashMap<u32, std::collections::HashSet<u32>>,
+    reachable: &std::collections::HashSet<u32>,
+) -> HashMap<u32, SsaBlock> {
     let mut defsites: HashMap<u16, std::collections::HashSet<u32>> = HashMap::new();
     for block in &cfg.blocks {
         if !reachable.contains(&block.id) {
@@ -134,7 +141,12 @@ fn place_phis(cfg: &ControlFlowGraph, df: &HashMap<u32, std::collections::HashSe
 
 /// Dominator-tree-order renaming (Cytron et al.'s "Search" procedure,
 /// iterative to avoid recursion depth issues on adversarial input).
-fn rename(cfg: &ControlFlowGraph, idom: &HashMap<u32, u32>, blocks: &mut HashMap<u32, SsaBlock>, uses_of: &mut HashMap<SsaValue, Vec<UseSite>>) {
+fn rename(
+    cfg: &ControlFlowGraph,
+    idom: &HashMap<u32, u32>,
+    blocks: &mut HashMap<u32, SsaBlock>,
+    uses_of: &mut HashMap<SsaValue, Vec<UseSite>>,
+) {
     let mut children: HashMap<u32, Vec<u32>> = HashMap::new();
     for (&b, &p) in idom {
         if b != ENTRY {
@@ -174,7 +186,10 @@ fn rename(cfg: &ControlFlowGraph, idom: &HashMap<u32, u32>, blocks: &mut HashMap
                 for &u in &du.uses {
                     let val = top(&stacks, u);
                     use_vals.push(val);
-                    uses_of.entry(val).or_default().push(UseSite::Instruction { block, code_unit_offset: insn.code_unit_offset });
+                    uses_of.entry(val).or_default().push(UseSite::Instruction {
+                        block,
+                        code_unit_offset: insn.code_unit_offset,
+                    });
                 }
                 let mut def_vals = Vec::new();
                 for &d in &du.defs {
@@ -183,7 +198,11 @@ fn rename(cfg: &ControlFlowGraph, idom: &HashMap<u32, u32>, blocks: &mut HashMap
                     pushed.push(d);
                     def_vals.push(v);
                 }
-                new_instructions.push(SsaInstruction { code_unit_offset: insn.code_unit_offset, defs: def_vals, uses: use_vals });
+                new_instructions.push(SsaInstruction {
+                    code_unit_offset: insn.code_unit_offset,
+                    defs: def_vals,
+                    uses: use_vals,
+                });
             }
             if let Some(ssa_block) = blocks.get_mut(&block) {
                 ssa_block.instructions = new_instructions;
@@ -193,12 +212,21 @@ fn rename(cfg: &ControlFlowGraph, idom: &HashMap<u32, u32>, blocks: &mut HashMap
             // top-of-stack values are current (before recursing further, and
             // before this block's own pushes get popped).
             for &succ in &cfg.blocks[block as usize].successors {
-                let Some(pred_index) = cfg.blocks[succ as usize].predecessors.iter().position(|&p| p == block) else { continue };
+                let Some(pred_index) = cfg.blocks[succ as usize]
+                    .predecessors
+                    .iter()
+                    .position(|&p| p == block)
+                else {
+                    continue;
+                };
                 if let Some(succ_block) = blocks.get_mut(&succ) {
                     for phi in &mut succ_block.phis {
                         let val = top(&stacks, phi.vreg);
                         phi.operands[pred_index] = val;
-                        uses_of.entry(val).or_default().push(UseSite::Phi { block: succ, vreg: phi.vreg });
+                        uses_of.entry(val).or_default().push(UseSite::Phi {
+                            block: succ,
+                            vreg: phi.vreg,
+                        });
                     }
                 }
             }
@@ -224,7 +252,11 @@ fn rename(cfg: &ControlFlowGraph, idom: &HashMap<u32, u32>, blocks: &mut HashMap
 /// `SsaInstruction`s, but in isolation: no phis, and every use defaults to
 /// the block's own local version-0 rather than merging with the reachable
 /// graph, since there's no dominance relationship to justify a merge.
-fn rename_unreachable_blocks(cfg: &ControlFlowGraph, reachable: &std::collections::HashSet<u32>, blocks: &mut HashMap<u32, SsaBlock>) {
+fn rename_unreachable_blocks(
+    cfg: &ControlFlowGraph,
+    reachable: &std::collections::HashSet<u32>,
+    blocks: &mut HashMap<u32, SsaBlock>,
+) {
     for block in &cfg.blocks {
         if reachable.contains(&block.id) {
             continue;
@@ -234,7 +266,14 @@ fn rename_unreachable_blocks(cfg: &ControlFlowGraph, reachable: &std::collection
         let mut instructions = Vec::new();
         for insn in &block.instructions {
             let du = def_use(insn);
-            let uses = du.uses.iter().map(|&u| SsaValue { vreg: u, version: stacks.get(&u).copied().unwrap_or(0) }).collect();
+            let uses = du
+                .uses
+                .iter()
+                .map(|&u| SsaValue {
+                    vreg: u,
+                    version: stacks.get(&u).copied().unwrap_or(0),
+                })
+                .collect();
             let defs: Vec<SsaValue> = du
                 .defs
                 .iter()
@@ -244,9 +283,19 @@ fn rename_unreachable_blocks(cfg: &ControlFlowGraph, reachable: &std::collection
                     v
                 })
                 .collect();
-            instructions.push(SsaInstruction { code_unit_offset: insn.code_unit_offset, defs, uses });
+            instructions.push(SsaInstruction {
+                code_unit_offset: insn.code_unit_offset,
+                defs,
+                uses,
+            });
         }
-        blocks.insert(block.id, SsaBlock { phis: Vec::new(), instructions });
+        blocks.insert(
+            block.id,
+            SsaBlock {
+                phis: Vec::new(),
+                instructions,
+            },
+        );
     }
 }
 
@@ -280,8 +329,22 @@ mod tests {
     use crate::code::{CodeUnit, Instruction};
     use crate::opcode::Format;
 
-    fn insn(offset: u32, opcode: u8, format: Format, registers: Vec<u16>, branch_offset: Option<i32>) -> Instruction {
-        Instruction { code_unit_offset: offset, opcode, format, registers, literal: None, branch_offset, index: None }
+    fn insn(
+        offset: u32,
+        opcode: u8,
+        format: Format,
+        registers: Vec<u16>,
+        branch_offset: Option<i32>,
+    ) -> Instruction {
+        Instruction {
+            code_unit_offset: offset,
+            opcode,
+            format,
+            registers,
+            literal: None,
+            branch_offset,
+            index: None,
+        }
     }
 
     /// if (v0) v1 = const 1 else v1 = const 2; return v1
@@ -309,10 +372,16 @@ mod tests {
         let phi = &join.phis[0];
         assert_eq!(phi.vreg, 1);
         assert_eq!(phi.operands.len(), 2, "one operand per predecessor edge");
-        assert_ne!(phi.operands[0], phi.operands[1], "then/else assign v1 in different blocks, so must carry distinct SSA versions");
+        assert_ne!(
+            phi.operands[0], phi.operands[1],
+            "then/else assign v1 in different blocks, so must carry distinct SSA versions"
+        );
         for op in &phi.operands {
             assert_eq!(op.vreg, 1);
-            assert_ne!(op.version, 0, "both operands come from real defs, not the entry/undefined value");
+            assert_ne!(
+                op.version, 0,
+                "both operands come from real defs, not the entry/undefined value"
+            );
         }
 
         // The join block's `return v1` must use the phi's result, not either branch's raw def.
@@ -323,8 +392,14 @@ mod tests {
         // predecessor) and the return's use of the phi result.
         assert_eq!(ssa.uses_of.get(&phi.result).map(|v| v.len()), Some(1));
         for op in &phi.operands {
-            let sites = ssa.uses_of.get(op).expect("each branch's def must be recorded as read by the phi");
-            assert!(sites.contains(&UseSite::Phi { block: join_id, vreg: 1 }));
+            let sites = ssa
+                .uses_of
+                .get(op)
+                .expect("each branch's def must be recorded as read by the phi");
+            assert!(sites.contains(&UseSite::Phi {
+                block: join_id,
+                vreg: 1
+            }));
         }
     }
 
@@ -345,7 +420,10 @@ mod tests {
         assert!(block.phis.is_empty());
         assert_eq!(block.instructions[0].defs[0].version, 1);
         assert_eq!(block.instructions[1].defs[0].version, 2);
-        assert_eq!(block.instructions[2].uses[0].version, 2, "must reference the second def, not the first");
+        assert_eq!(
+            block.instructions[2].uses[0].version, 2,
+            "must reference the second def, not the first"
+        );
     }
 
     /// A vreg read with no preceding def anywhere in the method (e.g. a
@@ -356,7 +434,13 @@ mod tests {
         let cfg = build_cfg(&units);
         let ssa = build_ssa(&cfg);
         let block = &ssa.blocks[&ENTRY];
-        assert_eq!(block.instructions[0].uses, vec![SsaValue { vreg: 2, version: 0 }]);
+        assert_eq!(
+            block.instructions[0].uses,
+            vec![SsaValue {
+                vreg: 2,
+                version: 0
+            }]
+        );
     }
 
     /// Loop: v0 = const 0 (preheader); header: if (v0 >= N) exit; v0 = v0 +
@@ -366,15 +450,19 @@ mod tests {
     #[test]
     fn loop_header_phi_merges_preheader_and_back_edge() {
         let units = vec![
-            CodeUnit::Insn(insn(0, 0x12, Format::F11n, vec![0], None)),         // const/4 v0, #0 (preheader)
-            CodeUnit::Insn(insn(1, 0x38, Format::F21t, vec![0], Some(5))),      // header: if-eqz v0 -> 6 (exit)
-            CodeUnit::Insn(insn(3, 0xd8, Format::F22b, vec![0, 0], None)),      // body: v0 = v0 + #1 (add-int/lit8, width 2)
-            CodeUnit::Insn(insn(5, 0x28, Format::F10t, vec![], Some(-4))),      // goto -> header (1)
-            CodeUnit::Insn(insn(6, 0x0e, Format::F10x, vec![], None)),          // exit: return-void
+            CodeUnit::Insn(insn(0, 0x12, Format::F11n, vec![0], None)), // const/4 v0, #0 (preheader)
+            CodeUnit::Insn(insn(1, 0x38, Format::F21t, vec![0], Some(5))), // header: if-eqz v0 -> 6 (exit)
+            CodeUnit::Insn(insn(3, 0xd8, Format::F22b, vec![0, 0], None)), // body: v0 = v0 + #1 (add-int/lit8, width 2)
+            CodeUnit::Insn(insn(5, 0x28, Format::F10t, vec![], Some(-4))), // goto -> header (1)
+            CodeUnit::Insn(insn(6, 0x0e, Format::F10x, vec![], None)),     // exit: return-void
         ];
         let cfg = build_cfg(&units);
         let header_id = cfg.blocks.iter().find(|b| b.start == 1).unwrap().id;
-        assert_eq!(cfg.blocks[header_id as usize].predecessors.len(), 2, "preheader + back-edge");
+        assert_eq!(
+            cfg.blocks[header_id as usize].predecessors.len(),
+            2,
+            "preheader + back-edge"
+        );
 
         let ssa = build_ssa(&cfg);
         let header = &ssa.blocks[&header_id];
@@ -406,9 +494,17 @@ mod tests {
 
         let ssa = build_ssa(&cfg);
         let block = &ssa.blocks[&ENTRY];
-        assert_eq!(block.phis.len(), 1, "v0's cross-iteration merge needs a phi at the block's own top");
+        assert_eq!(
+            block.phis.len(),
+            1,
+            "v0's cross-iteration merge needs a phi at the block's own top"
+        );
         assert_eq!(block.phis[0].vreg, 0);
-        assert_eq!(block.phis[0].operands.len(), 1, "one operand: the back-edge from this same block");
+        assert_eq!(
+            block.phis[0].operands.len(),
+            1,
+            "one operand: the back-edge from this same block"
+        );
 
         // The add's use of v0 must be the phi's result (the merged value),
         // and the back-edge operand must be THIS iteration's def, not the

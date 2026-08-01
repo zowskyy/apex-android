@@ -15,8 +15,15 @@ impl<'a> ArscReader<'a> {
     }
 
     fn check(&self, offset: usize, needed: usize) -> Result<()> {
-        if offset.checked_add(needed).is_none_or(|end| end > self.data.len()) {
-            return Err(ArscError::Truncated { offset, needed, len: self.data.len() });
+        if offset
+            .checked_add(needed)
+            .is_none_or(|end| end > self.data.len())
+        {
+            return Err(ArscError::Truncated {
+                offset,
+                needed,
+                len: self.data.len(),
+            });
         }
         Ok(())
     }
@@ -59,14 +66,26 @@ pub fn read_chunk_header(r: &ArscReader, offset: usize) -> Result<ChunkHeader> {
     let header_size = r.u16_at(offset + 2)?;
     let size = r.u32_at(offset + 4)?;
     if (header_size as usize) < CHUNK_HEADER_SIZE {
-        return Err(ArscError::HeaderTooSmall { offset, header_size: header_size as usize, min: CHUNK_HEADER_SIZE });
+        return Err(ArscError::HeaderTooSmall {
+            offset,
+            header_size: header_size as usize,
+            min: CHUNK_HEADER_SIZE,
+        });
     }
     if (size as usize) < header_size as usize {
-        return Err(ArscError::ChunkSizeTooSmall { offset, size: size as usize, header_size: header_size as usize });
+        return Err(ArscError::ChunkSizeTooSmall {
+            offset,
+            size: size as usize,
+            header_size: header_size as usize,
+        });
     }
     // Bound-check that the whole chunk actually fits, so every downstream
     // consumer that trusts `size` (e.g. "next chunk starts at offset+size")
     // never walks past the buffer on malformed/truncated input.
     r.bytes_at(offset, size as usize)?;
-    Ok(ChunkHeader { chunk_type, header_size, size })
+    Ok(ChunkHeader {
+        chunk_type,
+        header_size,
+        size,
+    })
 }

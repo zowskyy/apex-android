@@ -1,6 +1,9 @@
 //! Class-level Java emission over reconstructed DEX method bodies.
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
+
+use rayon::prelude::*;
 
 use crate::class_data::{ClassData, EncodedField, EncodedMethod};
 use crate::class_def::ClassDef;
@@ -23,6 +26,14 @@ pub struct ClassSummary {
 
 pub fn decompile_class(dex: &DexFile<'_>, def: &ClassDef) -> String {
     let resources = build_resource_map(dex);
+    decompile_class_with_resources(dex, def, &resources)
+}
+
+fn decompile_class_with_resources(
+    dex: &DexFile<'_>,
+    def: &ClassDef,
+    resources: &BTreeMap<i64, String>,
+) -> String {
     let descriptor = dex.type_name(def.class_idx).unwrap_or("");
     let class_name = descriptor_simple_name(descriptor);
     let mut out = Vec::new();
@@ -65,7 +76,7 @@ pub fn decompile_class(dex: &DexFile<'_>, def: &ClassDef) -> String {
 
     out.push(format!("{header} {{"));
     match dex.class_data(def) {
-        Ok(data) => emit_class_data(dex, def, &data, &resources, &class_name, &mut out),
+        Ok(data) => emit_class_data(dex, def, &data, resources, &class_name, &mut out),
         Err(err) => out.push(format!("    // class_data parse failed: {err}")),
     }
     out.push("}".to_string());
@@ -73,14 +84,18 @@ pub fn decompile_class(dex: &DexFile<'_>, def: &ClassDef) -> String {
 }
 
 pub fn decompile_all(dex: &DexFile<'_>) -> Vec<(String, String)> {
+    let resources = Arc::new(build_resource_map(dex));
     dex.class_defs
-        .iter()
+        .par_iter()
         .map(|def| {
             let name = dex
                 .type_name(def.class_idx)
                 .map(java_type)
                 .unwrap_or_default();
-            (name, decompile_class(dex, def))
+            (
+                name,
+                decompile_class_with_resources(dex, def, resources.as_ref()),
+            )
         })
         .collect()
 }
