@@ -72,7 +72,7 @@ code{color:#b7f5ff;word-break:break-all}.ok{color:var(--green)}.bad{color:var(--
 <section id="busy" class="panel hidden"><div class="loader"></div><p style="text-align:center;color:var(--muted)">Analyzing package structure and security signals…</p></section>
 <section id="results" class="hidden">
 <div style="display:flex;align-items:center;gap:12px"><div><h2 id="filename" style="font-size:22px;margin:0"></h2><div id="hash" class="tag"></div></div><span id="platformBadge" class="pill"></span><div class="spacer"></div><button id="sbom" class="secondary">Download SBOM</button><button id="decompile" class="secondary">Decompile Java</button></div>
-<div class="grid"><div class="metric"><div id="entries" class="n">0</div><div class="l">ARCHIVE ENTRIES</div></div><div class="metric"><div id="dex" class="n">0</div><div class="l">DEX CLASSES</div></div><div class="metric"><div id="perms" class="n">0</div><div class="l">PERMISSIONS</div></div><div class="metric"><div id="trackers" class="n">0</div><div class="l">TRACKERS</div></div><div class="metric"><div id="posture" class="n">—</div><div class="l">PRIVACY GRADE</div></div><div class="metric"><div id="risk" class="n">—</div><div class="l">SECURITY VERDICT</div></div></div>
+<div class="grid"><div class="metric"><div id="entries" class="n">0</div><div id="lblEntries" class="l">ARCHIVE ENTRIES</div></div><div class="metric"><div id="dex" class="n">0</div><div id="lblDex" class="l">DEX CLASSES</div></div><div class="metric"><div id="perms" class="n">0</div><div id="lblPerms" class="l">PERMISSIONS</div></div><div class="metric"><div id="trackers" class="n">0</div><div class="l">TRACKERS</div></div><div class="metric"><div id="posture" class="n">—</div><div class="l">PRIVACY GRADE</div></div><div class="metric"><div id="risk" class="n">—</div><div class="l">SECURITY VERDICT</div></div></div>
 <div class="columns"><div class="panel"><h2>Application identity</h2><div id="identity"></div></div><div class="panel"><h2 id="componentsTitle">Entry points</h2><div id="components"></div></div><div class="panel"><h2>Trackers &amp; libraries</h2><div id="intel"></div></div><div class="panel"><h2>Privacy posture</h2><div id="posturePanel"></div></div><div class="panel"><h2 id="permsTitle">Permissions</h2><div id="permissions"></div></div><div class="panel"><h2>Security findings</h2><div id="findings"></div></div></div>
 <div class="panel" style="margin-top:14px" id="signingCard"><h2>Signing &amp; certificates</h2><div id="signing"></div></div>
 <div class="panel" style="margin-top:14px"><h2>Native architectures & resource table</h2><div id="technical"></div></div>
@@ -99,6 +99,7 @@ renderIntel(data.intelligence);renderPosture(data.privacy_posture);
 if(data.platform==="ios"){return renderIos(data)}
 const i=data.inspect,s=data.security,m=i.manifest||{};
 $("signingCard").classList.remove("hidden");$("decompile").classList.remove("hidden");$("permsTitle").textContent="Permissions";$("componentsTitle").textContent="Entry points";
+$("lblEntries").textContent="ARCHIVE ENTRIES";$("lblDex").textContent="DEX CLASSES";$("lblPerms").textContent="PERMISSIONS";
 $("filename").textContent=i.path.split(/[\\/]/).pop();$("hash").textContent=i.sha256;$("entries").textContent=i.entry_count;$("dex").textContent=(data.dex?.classes||[]).length;$("perms").textContent=(m.permissions||[]).length;$("risk").textContent=s.verdict;
 $("identity").innerHTML=kv("Package",m.package)+kv("Version",`${m.version_name||"?"} (${m.version_code||"?"})`)+kv("SDK",`min ${m.min_sdk||"?"} · target ${m.target_sdk||"?"}`)+kv("Main activity",m.main_activity);
 $("components").innerHTML=pills([...(m.activities||[]),...(m.services||[]),...(m.receivers||[]),...(m.providers||[])]);
@@ -106,7 +107,8 @@ $("permissions").innerHTML=pills(m.permissions||[]);$("findings").innerHTML=s.fi
 $("technical").innerHTML=kv("Format",(i.format||"apk").toUpperCase())+kv("DEX files",(i.dex_files||[]).join(", ")||"none")+kv("Native ABIs",(i.native_abis||[]).join(", ")||"none")+kv("Resource packages",(i.resource_table?.packages||[]).join(", ")||"none")+kv("Locales",(i.resource_table?.locales||[]).join(", ")||"none");renderSigning(data.signing);renderClasses()}
 function renderIos(data){const r=data.ios||{},a=r.app||{},b=r.binary||{},s=data.security;
 $("signingCard").classList.add("hidden");$("decompile").classList.add("hidden");$("permsTitle").textContent="Embedded frameworks";$("componentsTitle").textContent="Privacy manifest";
-$("filename").textContent=(r.path||"").split(/[\\/]/).pop();$("hash").textContent=r.sha256||"";$("entries").textContent=(r.frameworks||[]).length;$("dex").textContent=(b.dylibs||[]).length;$("perms").textContent=(r.frameworks||[]).length;$("risk").textContent=s.verdict;
+$("lblEntries").textContent="FRAMEWORKS";$("lblDex").textContent="LINKED DYLIBS";$("lblPerms").textContent="ARCHITECTURES";
+$("filename").textContent=(r.path||"").split(/[\\/]/).pop();$("hash").textContent=r.sha256||"";$("entries").textContent=(r.frameworks||[]).length;$("dex").textContent=(b.dylibs||[]).length;$("perms").textContent=(b.architectures||[]).length;$("risk").textContent=s.verdict;
 $("identity").innerHTML=kv("Bundle ID",a.bundle_id)+kv("Name",a.name)+kv("Version",`${a.version||"?"} (${a.build||"?"})`)+kv("Min iOS",a.minimum_os)+kv("Executable",a.executable);
 const pm=r.privacy_manifest||{};$("components").innerHTML=pm.present?kv("Tracking",pm.tracking?"declared":"not declared")+kv("Tracking domains",(pm.tracking_domains||[]).join(", ")||"none")+kv("Collected data",(pm.collected_data_types||[]).join(", ")||"none"):'<span class="empty">No PrivacyInfo.xcprivacy present.</span>';
 $("permissions").innerHTML=pills(r.frameworks||[]);
@@ -224,11 +226,19 @@ class ApexWebHandler(BaseHTTPRequestHandler):
             cleartext=ats_insecure,
             privacy_manifest=report.get("privacy_manifest"),
         )
+        findings = report.get("findings", [])
+        order = {"low": 1, "medium": 2, "high": 3, "critical": 4}
+        highest = max((order.get(str(f.get("severity")), 1) for f in findings), default=0)
+        verdict = "HIGH_RISK" if highest >= 3 else ("REVIEW" if findings else "CLEAN")
         return {
             "platform": "ios",
             "path": str(resolved),
             "ios": report,
-            "security": {"verdict": posture["grade"], "findings": report.get("findings", [])},
+            "security": {
+                "verdict": verdict,
+                "findings": findings,
+                "finding_count": len(findings),
+            },
             "intelligence": summarize_detections(detections),
             "privacy_posture": posture,
         }
