@@ -11,11 +11,15 @@ import zipfile
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
+from apex.corpus.stats import corpus_packages, corpus_stats
+from apex.device.adb import list_packages
+from apex.device.sync import list_connected, sync_device
+from apex.providers.registry import get_adb_command
+from apex.signing.display import format_signing_panel
+from apex.signing.native import analyze_signatures, cross_check_with_apksigner
 from apex.version import __version__
-from apex.corpus.stats import corpus_stats
-from apex.device.sync import list_connected
 
 from .analysis import ApexError, dex_metadata, inspect_apk, sanitized_zip_name
 from .workflows import decompile_apk, doctor, security_scan
@@ -41,9 +45,26 @@ input[type=file]{display:none}.pathbar{display:flex;gap:8px;margin-top:12px}.pat
 .pill{display:inline-block;padding:4px 9px;border-radius:20px;background:#1a2a43;margin:3px;color:#bed4ef}.finding{border-left:3px solid var(--red);padding:9px 12px;background:#21131b;margin:8px 0;border-radius:4px}.finding.low{border-color:#e7c65e}
 pre{white-space:pre-wrap;word-break:break-word;color:#b9c8dc;max-height:360px;overflow:auto}.empty{color:var(--muted)}.loader{width:24px;height:24px;border:3px solid #273954;border-top-color:var(--cyan);border-radius:50%;animation:spin .8s linear infinite;margin:auto}@keyframes spin{to{transform:rotate(360deg)}}
 footer{color:var(--muted);text-align:center;padding:34px}@media(max-width:800px){.hero,.columns{grid-template-columns:1fr}.grid{grid-template-columns:1fr 1fr}.tag{display:none}}
+nav.tabs{display:flex;gap:8px;margin:0 0 22px}nav.tabs button{background:var(--surface2);border:1px solid var(--line);color:var(--muted);font-weight:650}
+nav.tabs button.active{background:linear-gradient(90deg,#27bfdc,#7866e8);color:#fff}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px;border-bottom:1px solid #23314a;font-size:13px}th{color:var(--muted);font-weight:600}
+code{color:#b7f5ff;word-break:break-all}.ok{color:var(--green)}.bad{color:var(--red)}
+.mono{font-family:ui-monospace,monospace;font-size:12px;word-break:break-all;overflow-wrap:anywhere;line-height:1.45}
+.kv span:last-child{min-width:0;overflow-wrap:anywhere}
 </style></head>
 <body><header><div class="mark">A</div><div><div class="brand">APEX</div><div class="tag">ANDROID PACKAGE EXAMINER</div></div><div class="spacer"></div><div id="health" class="status">● Engine ready</div></header>
 <main>
+<nav class="tabs"><button id="tabAnalyze" class="active">Analyze</button><button id="tabDevices">Devices</button><button id="tabCorpus">Corpus</button></nav>
+<div id="viewDevices" class="hidden">
+<div class="panel"><h2>Connected devices</h2><div style="display:flex;gap:8px;margin-bottom:12px"><button id="devRefresh" class="secondary">Refresh devices</button></div><div id="deviceList"><span class="empty">Loading…</span></div></div>
+<div class="panel" style="margin-top:14px"><h2>Device packages</h2><div class="pathbar"><input id="devSerial" placeholder="device serial"><button id="devPackages" class="secondary">List packages</button><button id="devSync">Sync to corpus</button></div><div id="packageList" style="margin-top:12px;max-height:420px;overflow:auto"><span class="empty">Select a device to list installed packages.</span></div></div>
+<div class="panel" style="margin-top:14px"><p class="tag">APEX reads packages from a device you have authorized over ADB. Nothing leaves this machine.</p></div>
+</div>
+<div id="viewCorpus" class="hidden">
+<div class="panel"><h2>Local corpus</h2><div class="pathbar"><input id="corpusDb" placeholder="~/.apex/corpus.db"><button id="corpusGo" class="secondary">Load stats</button></div><div id="corpusStats" style="margin-top:14px"><span class="empty">Load the corpus index to see statistics.</span></div></div>
+<div class="panel" style="margin-top:14px"><h2>Indexed packages</h2><div id="corpusPackages"><span class="empty">No corpus loaded.</span></div></div>
+</div>
+<div id="viewAnalyze">
 <section class="hero"><div><h1>Understand any APK.<br><span class="gradient">Before it understands you.</span></h1><p class="lead">Inspect manifests, permissions, resources, DEX classes, native libraries, and static security signals from one private local workspace.</p></div>
 <div><div id="drop" class="drop"><div><strong>Drop an APK here</strong><p>Files stay on this machine.</p><label class="button" for="file">Choose APK</label><input id="file" type="file" accept=".apk,.zip"></div></div><div class="pathbar"><input id="path" placeholder="/path/to/application.apk"><button id="pathGo" class="secondary">Open path</button></div></div></section>
 <section id="busy" class="panel hidden"><div class="loader"></div><p style="text-align:center;color:var(--muted)">Analyzing package structure and security signals…</p></section>
@@ -51,9 +72,10 @@ footer{color:var(--muted);text-align:center;padding:34px}@media(max-width:800px)
 <div style="display:flex;align-items:center;gap:12px"><div><h2 id="filename" style="font-size:22px;margin:0"></h2><div id="hash" class="tag"></div></div><div class="spacer"></div><button id="decompile" class="secondary">Decompile Java</button></div>
 <div class="grid"><div class="metric"><div id="entries" class="n">0</div><div class="l">ARCHIVE ENTRIES</div></div><div class="metric"><div id="dex" class="n">0</div><div class="l">DEX CLASSES</div></div><div class="metric"><div id="perms" class="n">0</div><div class="l">PERMISSIONS</div></div><div class="metric"><div id="risk" class="n">—</div><div class="l">SECURITY VERDICT</div></div></div>
 <div class="columns"><div class="panel"><h2>Application identity</h2><div id="identity"></div></div><div class="panel"><h2>Entry points</h2><div id="components"></div></div><div class="panel"><h2>Permissions</h2><div id="permissions"></div></div><div class="panel"><h2>Security findings</h2><div id="findings"></div></div></div>
+<div class="panel" style="margin-top:14px"><h2>Signing & certificates</h2><div id="signing"></div></div>
 <div class="panel" style="margin-top:14px"><h2>Native architectures & resource table</h2><div id="technical"></div></div>
 <div class="panel" style="margin-top:14px"><h2>Class & method explorer</h2><div class="pathbar"><input id="classSearch" placeholder="Search classes and methods"><button id="classGo" class="secondary">Search</button></div><div id="classList" style="margin-top:12px;max-height:430px;overflow:auto"></div></div>
-</section></main><footer>APEX runs locally · Static analysis is not a malware verdict</footer>
+</section></div></main><footer>APEX runs locally · Static analysis is not a malware verdict</footer>
 <script>
 let currentPath="", currentData=null;
 const $=id=>document.getElementById(id), esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -66,7 +88,25 @@ $("filename").textContent=i.path.split(/[\\/]/).pop();$("hash").textContent=i.sh
 $("identity").innerHTML=kv("Package",m.package)+kv("Version",`${m.version_name||"?"} (${m.version_code||"?"})`)+kv("SDK",`min ${m.min_sdk||"?"} · target ${m.target_sdk||"?"}`)+kv("Main activity",m.main_activity);
 $("components").innerHTML=pills([...(m.activities||[]),...(m.services||[]),...(m.receivers||[]),...(m.providers||[])]);
 $("permissions").innerHTML=pills(m.permissions||[]);$("findings").innerHTML=s.findings.length?s.findings.map(f=>`<div class="finding ${esc(f.severity)}"><strong>${esc(f.category)}</strong> · ${esc(f.message)}<br><small>${esc(f.evidence||"")}</small></div>`).join(""):'<span class="empty">No static security findings.</span>';
-$("technical").innerHTML=kv("Format",(i.format||"apk").toUpperCase())+kv("DEX files",(i.dex_files||[]).join(", ")||"none")+kv("Native ABIs",(i.native_abis||[]).join(", ")||"none")+kv("Resource packages",(i.resource_table?.packages||[]).join(", ")||"none")+kv("Locales",(i.resource_table?.locales||[]).join(", ")||"none");renderClasses()}
+$("technical").innerHTML=kv("Format",(i.format||"apk").toUpperCase())+kv("DEX files",(i.dex_files||[]).join(", ")||"none")+kv("Native ABIs",(i.native_abis||[]).join(", ")||"none")+kv("Resource packages",(i.resource_table?.packages||[]).join(", ")||"none")+kv("Locales",(i.resource_table?.locales||[]).join(", ")||"none");renderSigning(data.signing);renderClasses()}
+function renderSigning(sg){if(!sg){$("signing").innerHTML='<span class="empty">No signing data.</span>';return}
+const sch=Object.entries(sg.schemes||{}).map(([k,v])=>`<span class="pill">${esc(k)} ${v?'<span class="ok">✓</span>':'<span class="bad">✗</span>'}</span>`).join("");
+const cc=sg.cross_check||{};const ccText=cc.status==="match"?'<span class="ok">apksigner agrees</span>':cc.status==="mismatch"?`<span class="bad">apksigner differs: ${esc((cc.differences||[]).join("; "))}</span>`:'<span class="tag">apksigner cross-check not available (native result shown)</span>';
+$("signing").innerHTML=kv("Signed",sg.signed?"yes":"no")+kv("Engine",sg.provider)+`<div class="kv"><span>Schemes</span><span>${sch}</span></div>`+kv("Subject",sg.subject)+kv("Issuer",sg.issuer)+`<div class="kv"><span>SHA-256</span><span class="mono">${esc(sg.fingerprint_sha256||"—")}</span></div>`+`<div class="kv"><span>SHA-1</span><span class="mono">${esc(sg.fingerprint_sha1||"—")}</span></div>`+kv("Valid from",sg.not_valid_before)+kv("Valid until",sg.not_valid_after)+kv("Self-signed",sg.self_signed===undefined?"—":(sg.self_signed?"yes":"no"))+kv("Signers",sg.signer_count)+`<div class="kv"><span>Cross-check</span><span>${ccText}</span></div>`+(sg.warnings?.length?`<div class="finding low">${sg.warnings.map(esc).join("<br>")}</div>`:"")+(sg.trust_note?`<p class="tag">${esc(sg.trust_note)}</p>`:"")}
+function showTab(name){for(const t of ["Analyze","Devices","Corpus"]){$("view"+t).classList.toggle("hidden",t!==name);$("tab"+t).classList.toggle("active",t===name)}}
+$("tabAnalyze").onclick=()=>showTab("Analyze");$("tabDevices").onclick=()=>{showTab("Devices");loadDevices()};$("tabCorpus").onclick=()=>showTab("Corpus");
+async function loadDevices(){$("deviceList").innerHTML='<span class="empty">Loading…</span>';try{const r=await fetch("/api/devices");const d=await r.json();const devs=d.devices||[];
+$("deviceList").innerHTML=devs.length?`<table><tr><th>Serial</th><th>State</th><th>Model</th><th></th></tr>${devs.map(x=>`<tr><td><code>${esc(x.serial)}</code></td><td>${x.state==="device"?'<span class="ok">ready</span>':`<span class="bad">${esc(x.state)}</span>`}</td><td>${esc(x.model||"—")}</td><td><button class="secondary" onclick="selectDevice('${esc(x.serial)}')">Select</button></td></tr>`).join("")}</table>`:`<span class="empty">No devices detected. Connect a device with USB debugging or wireless debugging authorized.${d.hint?" "+esc(d.hint):""}</span>`}catch(e){$("deviceList").innerHTML=`<span class="empty">${esc(e.message)}</span>`}}
+function selectDevice(s){$("devSerial").value=s;listPackages()}
+async function listPackages(){const serial=$("devSerial").value.trim();if(!serial)return alert("Enter or select a device serial");$("packageList").innerHTML='<div class="loader"></div>';try{const r=await fetch("/api/devices/"+encodeURIComponent(serial)+"/packages");const d=await r.json();if(!r.ok)throw Error(d.error||"Failed");const ps=d.packages||[];
+$("packageList").innerHTML=ps.length?`<table><tr><th>Package</th><th>Type</th><th>Path</th></tr>${ps.map(p=>`<tr><td><code>${esc(p.package)}</code></td><td>${p.system?"system":"user"}</td><td class="mono">${esc(p.apk_path)}</td></tr>`).join("")}</table>`:'<span class="empty">No packages returned.</span>'}catch(e){$("packageList").innerHTML=`<span class="empty">${esc(e.message)}</span>`}}
+$("devRefresh").onclick=loadDevices;$("devPackages").onclick=listPackages;
+$("devSync").onclick=async()=>{const serial=$("devSerial").value.trim();if(!serial)return alert("Enter or select a device serial");if(!confirm("Sync installed packages from "+serial+" into the local corpus?"))return;$("packageList").innerHTML='<div class="loader"></div>';try{const r=await fetch("/api/devices/"+encodeURIComponent(serial)+"/sync",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"});const d=await r.json();if(!r.ok)throw Error(d.error||"Sync failed");$("packageList").innerHTML=`<p class="ok">Sync complete: ${d.changed} analyzed, ${d.skipped} unchanged.</p>`}catch(e){$("packageList").innerHTML=`<span class="empty">${esc(e.message)}</span>`}};
+async function loadCorpus(){const db=$("corpusDb").value.trim();const q=db?"?db="+encodeURIComponent(db):"";try{const r=await fetch("/api/corpus/stats"+q);const d=await r.json();if(!r.ok)throw Error(d.error||"Failed");
+$("corpusStats").innerHTML=`<div class="grid"><div class="metric"><div class="n">${d.package_count??0}</div><div class="l">PACKAGES</div></div><div class="metric"><div class="n">${d.snapshot_count??0}</div><div class="l">SNAPSHOTS</div></div><div class="metric"><div class="n">${d.artifact_count??0}</div><div class="l">ARTIFACTS</div></div><div class="metric"><div class="n">${esc(d.serial||"all")}</div><div class="l">SCOPE</div></div></div>`;
+const pr=await fetch("/api/corpus/packages"+q);const pd=await pr.json();const rows=pd.packages||[];
+$("corpusPackages").innerHTML=rows.length?`<table><tr><th>Package</th><th>Version</th><th>Report</th></tr>${rows.map(p=>`<tr><td><code>${esc(p.package_name)}</code></td><td>${esc(p.version_name||"")} (${esc(p.version_code??"")})</td><td class="mono">${esc(p.report_path||"—")}</td></tr>`).join("")}</table>`:'<span class="empty">No packages indexed yet. Run a device sync.</span>'}catch(e){$("corpusStats").innerHTML=`<span class="empty">${esc(e.message)}</span>`}}
+$("corpusGo").onclick=loadCorpus;
 async function pathAnalyze(path){busy(true);try{const r=await fetch("/api/open",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({path})});const d=await r.json();if(!r.ok)throw Error(d.error||"Analysis failed");render(d)}catch(e){alert(e.message)}finally{busy(false)}}
 async function upload(file){if(!file)return;busy(true);try{const r=await fetch("/api/upload?name="+encodeURIComponent(file.name),{method:"POST",body:file});const d=await r.json();if(!r.ok)throw Error(d.error||"Upload failed");render(d)}catch(e){alert(e.message)}finally{busy(false)}}
 $("file").onchange=e=>upload(e.target.files[0]);$("pathGo").onclick=()=>pathAnalyze($("path").value);
@@ -118,10 +158,13 @@ class ApexWebHandler(BaseHTTPRequestHandler):
                         dex[key].extend(metadata[key])
                 except Exception as exc:
                     dex["errors"].append({"dex": name, "error": str(exc)})
+        native = analyze_signatures(resolved)
+        native["cross_check"] = cross_check_with_apksigner(resolved, native)
         return {
             "path": str(resolved),
             "inspect": inspect_apk(resolved),
             "security": security_scan(resolved),
+            "signing": format_signing_panel(native),
             "dex": dex,
         }
 
@@ -137,12 +180,39 @@ class ApexWebHandler(BaseHTTPRequestHandler):
         elif path == "/api/health":
             self._json(doctor())
         elif path == "/api/devices":
-            self._json({"devices": list_connected()})
+            self._json(
+                {
+                    "devices": list_connected(),
+                    "hint": None
+                    if get_adb_command()
+                    else "adb was not found. Run: apex doctor",
+                }
+            )
+        elif re.fullmatch(r"/api/devices/[^/]+/packages", path):
+            serial = unquote(path.split("/")[3])
+            packages = list_packages(serial)
+            self._json(
+                {
+                    "serial": serial,
+                    "packages": [
+                        {
+                            "package": item.package,
+                            "apk_path": item.apk_path,
+                            "system": item.system,
+                        }
+                        for item in packages
+                    ],
+                }
+            )
         elif path == "/api/corpus/stats":
             query = parse_qs(urlparse(self.path).query)
-            db = query.get("db", [str(Path.home() / ".apex" / "corpus.db")])[0]
+            db = query.get("db", [""])[0] or str(Path.home() / ".apex" / "corpus.db")
             serial = query.get("serial", [None])[0]
             self._json(corpus_stats(Path(db), serial=serial))
+        elif path == "/api/corpus/packages":
+            query = parse_qs(urlparse(self.path).query)
+            db = query.get("db", [""])[0] or str(Path.home() / ".apex" / "corpus.db")
+            self._json({"packages": corpus_packages(Path(db))})
         else:
             self._json({"error": "not found"}, HTTPStatus.NOT_FOUND)
 
@@ -163,6 +233,13 @@ class ApexWebHandler(BaseHTTPRequestHandler):
                 destination = upload_root / safe_name
                 destination.write_bytes(self._body())
                 self._json(self._analyze_path(destination))
+                return
+            sync_match = re.fullmatch(r"/api/devices/([^/]+)/sync", route.path)
+            if sync_match:
+                serial = unquote(sync_match.group(1))
+                payload = self._payload() if int(self.headers.get("Content-Length", "0")) else {}
+                db = Path(str(payload.get("db") or Path.home() / ".apex" / "corpus.db"))
+                self._json(sync_device(serial, db, user_id=int(payload.get("user", 0))))
                 return
             if route.path == "/api/decompile":
                 payload = self._payload()

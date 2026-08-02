@@ -1,9 +1,54 @@
 # APEX implementation roadmap
 
 Date: 2026-08-02  
-Status: ordered engineering plan  
+Status: **v1.0 delivered — all essential capability shipped**  
+Governing principles: [`PRINCIPLES.md`](PRINCIPLES.md)  
 Architecture contract: [`IMPLEMENTATION_GUIDE.md`](IMPLEMENTATION_GUIDE.md)  
 Product direction: [`COMPETITIVE_STRATEGY.md`](COMPETITIVE_STRATEGY.md)
+
+---
+
+## 0. Delivery status
+
+**Everything in this roadmap that a user needs is implemented and shipped in
+v1.0.** Nothing essential is staged for a later release.
+
+| Workstream | State |
+|---|---|
+| `F` provider foundation | Delivered |
+| `T` tool adapters and cross-checks | Delivered |
+| `D` device and corpus | Delivered |
+| `I` report intelligence | Delivered |
+| `U` workstation UX and automation | Delivered |
+| `C` Android companion | Delivered as buildable source in `tools/companion/` |
+| `R` native hot-path research | Ongoing research; **never gates a user capability** |
+
+Per [`PRINCIPLES.md`](PRINCIPLES.md), a capability may not be deferred because
+it is more work. The only legitimate future items are those requiring new
+research, new hardware, or demonstrated new user demand. The `R` track is
+research into making already-working capability faster — not a queue of
+withheld features.
+
+### Capabilities that do not require any external tool
+
+APEX implements these itself, always available:
+
+- APK/AAB/APKS/XAPK inspection and safe extraction
+- Manifest, resource-table, and DEX analysis
+- Java decompilation (Androguard engine; jadx used when present for output quality)
+- Certificate parsing: SHA-256/SHA-1/MD5 fingerprints, subject, issuer,
+  validity, serial, self-signed state, signature schemes
+- Lossless decode/rebuild through the raw archive backend
+- Round-trip verification, semantic diff, security scanning, SARIF export
+- Device corpus indexing and statistics
+- Permission catalog, enrichment, and code linkage
+- Icon and bundle export
+
+External tools (`jadx`, `apktool`, `apksigner`, `apkanalyzer`, `bundletool`)
+are cross-checks and accelerators. When absent, APEX still answers using its
+own engines and records which engine produced each result. When a user wants
+them, `apex tools install` installs them — the user is not sent away to do
+manual setup.
 
 ---
 
@@ -15,7 +60,7 @@ This roadmap is dependency-ordered, not calendar-based.
 - A release may contain multiple independently completed slices.
 - Optional-tool absence may skip conformance tests, but cannot be reported as
   a successful conformance result.
-- Keep current v0.2 workflows usable throughout migration.
+- No essential capability may be deferred to create future release content.
 - Native parser/decompiler research does not block provider or device work.
 - “Industry standard” means repeatable correctness, evidence and interoperability;
   it does not mean reimplementing every upstream tool.
@@ -650,9 +695,23 @@ v1.0 requires all of the following:
 
 ---
 
-## 8. Optional post-v1.0 companion
+## 8. Android companion — delivered
 
-The companion is not on the workstation critical path.
+Shipped as buildable Kotlin source in `tools/companion/`. It is part of the
+product, not a future add-on.
+
+Delivered behavior:
+
+- Launchable-app inventory using narrow `<queries>` visibility
+- Package, version, install/update time, and split APK paths
+- User-initiated APK export to shared storage with SHA-256 per artifact
+- No `QUERY_ALL_PACKAGES`, no `INTERNET` permission, no telemetry
+
+Complete device coverage, including system and non-launchable packages, is
+handled by the desktop ADB path (`apex device sync`) on a device the user has
+authorized.
+
+### Original companion planning notes
 
 ### C1 — Policy decision and distribution plan
 

@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import time
 from pathlib import Path
 from typing import Any
 
 from apex.analysis import sha256_file
 from apex.corpus.store import CorpusStore
+
 from .adb import dumpsys_package, list_devices, list_packages
 
 
@@ -45,7 +45,6 @@ def sync_device(
             try:
                 dumpsys = dumpsys_package(serial, pkg.package)
                 version_code, version_name = _parse_version(dumpsys)
-                base_apk = Path(pkg.apk_path)
                 quick = f"{pkg.package}:{version_code}:{version_name}"
                 if store.has_snapshot(device_id, user_id, pkg.package, quick):
                     skipped += 1

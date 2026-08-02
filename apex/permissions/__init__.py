@@ -1,6 +1,6 @@
 """Permission intelligence package."""
 
-from .catalog import lookup_permission, load_catalog
+from .catalog import load_catalog, lookup_permission
 from .enrich import enrich_declared, enrich_with_grants, parse_granted_from_dumpsys
 from .linkage import link_permissions_to_dex
 

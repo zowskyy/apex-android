@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Any
 
 from apex.analysis import ApexError, sanitized_zip_name
-
 from apex.providers.registry import get_adb_command
 from apex.providers.runner import run_tool
 
@@ -67,7 +66,7 @@ def list_devices() -> list[DeviceInfo]:
 
 
 def list_packages(serial: str, *, user_id: int = 0) -> list[DevicePackage]:
-    output = _adb(["shell", "pm", "list", "packages", "-f", f"--user", str(user_id)], serial=serial)
+    output = _adb(["shell", "pm", "list", "packages", "-f", "--user", str(user_id)], serial=serial)
     packages: list[DevicePackage] = []
     for line in output.splitlines():
         line = line.strip()
@@ -91,7 +90,7 @@ def package_paths(serial: str, package: str, *, user_id: int = 0) -> list[str]:
     if not re.fullmatch(r"[A-Za-z0-9_.]+", package):
         raise ApexError(f"invalid package name: {package}")
     output = _adb(
-        ["shell", "pm", "path", package, f"--user", str(user_id)],
+        ["shell", "pm", "path", package, "--user", str(user_id)],
         serial=serial,
     )
     paths = []

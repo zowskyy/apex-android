@@ -63,9 +63,11 @@ def resolve_executable(name: str, *, env_key: str | None = None) -> tuple[str | 
     override = os.environ.get(env_key or "")
     if override and Path(override).exists():
         return override, "env"
-    managed = Path.home() / ".apex" / "tools" / name
-    if managed.is_file():
-        return str(managed), "managed"
+    from apex.providers.bootstrap import managed_path
+
+    managed = managed_path(name)
+    if managed:
+        return managed, "managed"
     found = shutil.which(name)
     if found:
         return found, "path"
@@ -80,7 +82,11 @@ def resolve_java_command() -> list[str] | None:
 
 
 def resolve_jar_command(jar_env: str, jar_name: str) -> list[str] | None:
+    from apex.providers.bootstrap import managed_path
+
     jar = os.environ.get(jar_env)
+    if not (jar and Path(jar).is_file()):
+        jar = managed_path(jar_name.replace(".jar", ""))
     if jar and Path(jar).is_file():
         java = resolve_java_command()
         if java:

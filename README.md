@@ -110,9 +110,33 @@ peers such as APKLab) is a local analysis workstation that:
 
 Execution documents:
 
+- `docs/PRINCIPLES.md` — what APEX ships and why nothing essential is withheld
 - `docs/COMPETITIVE_STRATEGY.md` — product position and benchmark targets
 - `docs/IMPLEMENTATION_GUIDE.md` — architecture, contracts and test gates
-- `docs/ROADMAP.md` — dependency-ordered slices and release gates
+- `docs/ROADMAP.md` — delivery status and engineering detail
+
+## Product principle
+
+**Everything essential ships in the core product.**
+
+APEX does not withhold capability to create the appearance of future
+improvement, and does not push setup work onto the user. Certificate
+fingerprints, DEX and Java analysis, rebuild, verification, diffing, security
+scanning, device sync, and reporting all work without installing any external
+Android tool.
+
+Optional tools (`jadx`, `apktool`, `apksigner`, `apkanalyzer`, `bundletool`)
+serve two roles only: better output quality where they genuinely excel, and
+independent cross-checks of APEX's own results. Every report records which
+engine produced which output. When you want those tools, APEX installs them
+for you:
+
+```bash
+apex tools list
+apex tools install jadx
+```
+
+See `docs/PRINCIPLES.md`.
 
 ## Development
 

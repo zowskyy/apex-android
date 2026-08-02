@@ -3,14 +3,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
 from apex.corpus.store import CorpusStore
 from apex.permissions.catalog import lookup_permission
 from apex.permissions.enrich import enrich_declared, enrich_with_grants
 from apex.providers.apksigner import parse_apksigner_output
 from apex.providers.preflight import preflight_apk
-from apex.providers.registry import doctor_report, get_registry
+from apex.providers.registry import get_registry
 from apex.workflows import analyze_apk, doctor
 
 

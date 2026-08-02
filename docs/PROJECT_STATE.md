@@ -111,24 +111,32 @@ source.
   (no branches) produces a single block with no edges. Clippy clean. Whole
   workspace: 20 Rust tests passing.
 
-## Current Phase: v1.0 roadmap implementation complete
+## Current Phase: v1.0 complete suite delivered
 
-APEX v1.0 delivers the audited competitive strategy through provider
-orchestration, device corpus workflows, enriched reports, and expanded CLI/web
-surfaces. Native parser research (`R*`) and the optional companion app (`C*`)
-remain post-v1.0 tracks documented in `docs/ROADMAP.md`.
+APEX v1.0 ships the whole product. Per `docs/PRINCIPLES.md`, no essential
+capability is held back for a later release.
 
-Implemented in v1.0:
-- Provider foundation (`F1–F4`): types, runner, registry, schema v3 provenance, doctor v2
-- Tool adapters (`T1–T6`): apksigner, apktool 3.x, jadx, apkanalyzer benchmark, bundletool, preflight
-- Device corpus (`D1–D5`): ADB list/pull/sync, SQLite corpus, stats
-- Report intelligence (`I1–I6`): permission catalog, granted-state parser, signing panel, exports
-- Workstation UX (`U1–U4` partial): services layer, web device/corpus APIs, expanded CLI
+Delivered:
+- Provider foundation (`F1–F4`): types, bounded runner, registry, schema v3 provenance, doctor v2
+- Tool adapters (`T1–T6`): apktool 3.x, jadx, apkanalyzer, bundletool, preflight, apksigner cross-check
+- Device corpus (`D1–D5`): ADB list/packages/pull/sync, SQLite corpus, statistics
+- Report intelligence (`I1–I6`): permission catalog, granted-state, permission-to-code linkage,
+  full native certificate analysis, icon and bundle export
+- Workstation UX (`U1–U5`): services layer, Devices tab, Corpus dashboard, SARIF, managed tool install
+- Companion (`C`): buildable Kotlin app in `tools/companion/`
 
-## Next Slice
+### Native capability (no external tool required)
 
-Post-v1.0 optional work: companion app (`C*`), native hot-path promotion (`R*`),
-CI packaging matrix (`U5`), and live-device conformance expansion (`D6`).
+Certificate fingerprints, subject/issuer, validity, and signature schemes are
+computed by `apex/signing/native.py`. Verified byte-for-byte against the JDK's
+`keytool -printcert` on a real jarsigner-signed fixture. `apksigner`, when
+installed, runs only as an independent cross-check and is reported as such.
+
+## Ongoing work
+
+Research only — none of it gates a user-facing capability:
+- `R*` native hot-path promotion (Rust ZIP inventory batching, DEX bridge, ARSC, signing block)
+- Broadening the conformance corpus and live-device matrix as hardware becomes available
 
 ## Blockers
 - None.

@@ -11,7 +11,7 @@ from apex.analysis import ApexError, descriptor_to_java
 
 from .registry import get_jadx_command
 from .runner import run_tool
-from .types import ProvenanceCollector, ProvenanceRecord, timed_operation
+from .types import ProvenanceCollector, timed_operation
 
 
 def jadx_version() -> str | None:

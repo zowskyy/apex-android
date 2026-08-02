@@ -11,7 +11,11 @@ from typing import Any
 from apex.analysis import ApexError, diff_indexes, inspect_apk
 from apex.corpus.stats import corpus_stats
 from apex.device.sync import list_connected, sync_device
+from apex.providers.bootstrap import MANAGED_TOOLS, install_tool, list_tools
 from apex.providers.bundletool import build_apks, extract_apks, inspect_bundle
+from apex.reporting.sarif import security_scan_to_sarif
+from apex.signing.display import format_signing_panel
+from apex.signing.native import analyze_signatures, cross_check_with_apksigner
 from apex.version import __version__
 from apex.web import serve
 from apex.workflows import (
@@ -99,6 +103,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     security_cmd.add_argument("apk")
     security_cmd.add_argument("--output", "-o")
+    security_cmd.add_argument(
+        "--format",
+        choices=["json", "sarif"],
+        default="json",
+        help="output format for automation pipelines",
+    )
 
     diff_cmd = sub.add_parser("diff", help="semantic APK or report diff")
     diff_cmd.add_argument("left")
@@ -111,6 +121,21 @@ def build_parser() -> argparse.ArgumentParser:
     framework_cmd.add_argument("apk")
 
     sub.add_parser("doctor", help="show parser and external tool availability")
+
+    tools = sub.add_parser("tools", help="manage optional cross-check tools")
+    tools_sub = tools.add_subparsers(dest="tools_command", required=True)
+    tools_sub.add_parser("list", help="show managed tool catalog and install state")
+    tools_install = tools_sub.add_parser("install", help="download and install a managed tool")
+    tools_install.add_argument("name", choices=sorted(MANAGED_TOOLS))
+    tools_install.add_argument(
+        "--skip-checksum",
+        action="store_true",
+        help="install without verifying the pinned checksum",
+    )
+
+    signing_cmd = sub.add_parser("signing", help="certificate and signature detail")
+    signing_cmd.add_argument("apk")
+    signing_cmd.add_argument("--output", "-o")
 
     icon_cmd = sub.add_parser("icon", help="export launcher icon from an APK")
     icon_cmd.add_argument("apk")
@@ -208,7 +233,8 @@ def main(argv: list[str] | None = None) -> int:
             return 0 if result["verdict"] == "PASS" else 3
         elif args.command == "security-scan":
             result = security_scan(Path(args.apk))
-            _print(result, args.output)
+            payload = security_scan_to_sarif(result) if args.format == "sarif" else result
+            _print(payload, args.output)
             return 0 if result["verdict"] in {"CLEAN", "REVIEW"} else 4
         elif args.command == "diff":
             left, right = Path(args.left), Path(args.right)
@@ -223,6 +249,15 @@ def main(argv: list[str] | None = None) -> int:
             _print(framework_check(Path(args.apk)))
         elif args.command == "doctor":
             _print(doctor())
+        elif args.command == "tools":
+            if args.tools_command == "list":
+                _print(list_tools())
+            elif args.tools_command == "install":
+                _print(install_tool(args.name, verify_checksum=not args.skip_checksum))
+        elif args.command == "signing":
+            native = analyze_signatures(Path(args.apk))
+            native["cross_check"] = cross_check_with_apksigner(Path(args.apk), native)
+            _print(format_signing_panel(native), args.output)
         elif args.command == "icon":
             _print(export_icon(Path(args.apk), Path(args.output)))
         elif args.command == "export":

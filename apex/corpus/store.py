@@ -117,6 +117,21 @@ class CorpusStore:
         )
         self.conn.commit()
 
+    def packages(self, *, serial: str | None = None) -> list[dict[str, Any]]:
+        query = """
+            SELECT ps.package_name, ps.version_code, ps.version_name,
+                   ps.artifact_sha256, ps.report_path, d.serial
+            FROM package_snapshots ps
+            JOIN sync_runs sr ON sr.id = ps.sync_run_id
+            JOIN devices d ON d.id = sr.device_id
+        """
+        params: tuple[Any, ...] = ()
+        if serial:
+            query += " WHERE d.serial = ?"
+            params = (serial,)
+        query += " ORDER BY ps.package_name"
+        return [dict(row) for row in self.conn.execute(query, params).fetchall()]
+
     def stats(self, *, device_id: int | None = None) -> dict[str, Any]:
         where = "WHERE sr.device_id = ?" if device_id else ""
         params: tuple[Any, ...] = (device_id,) if device_id else ()

@@ -24,7 +24,6 @@ from jinja2 import Template
 from apex.permissions.enrich import enrich_declared
 from apex.permissions.linkage import link_permissions_to_dex
 from apex.providers.apkanalyzer import benchmark_apk
-from apex.providers.apksigner import verify_signatures_androguard, verify_signatures_apksigner
 from apex.providers.apktool import (
     build_with_apktool,
     decode_with_apktool,
@@ -35,6 +34,7 @@ from apex.providers.preflight import preflight_apk
 from apex.providers.registry import doctor_report, get_registry
 from apex.providers.types import ProvenanceCollector, ProvenanceRecord, attach_provenance
 from apex.signing.display import format_signing_panel
+from apex.signing.native import analyze_signatures, cross_check_with_apksigner
 from apex.version import __version__
 
 from .analysis import (
@@ -43,14 +43,12 @@ from .analysis import (
     build_crossrefs,
     build_reachability,
     decode_binary_xml,
-    descriptor_to_java,
     dex_metadata,
     diff_indexes,
     export_minimal_bundle,
     extract_apk,
     inspect_apk,
     inventory_files,
-    load_dex,
     resource_table_info,
     sanitized_zip_name,
     scan_dex_metadata,
@@ -561,20 +559,28 @@ def verify_apk(apk_path: Path) -> dict[str, Any]:
     except (OSError, zipfile.BadZipFile) as exc:
         return {"valid": False, "findings": [{"severity": "error", "message": str(exc)}]}
 
-    signatures: dict[str, Any]
     collector = ProvenanceCollector()
-    try:
-        signatures = verify_signatures_apksigner(apk_path, collector=collector)
-    except ApexError:
-        signatures = verify_signatures_androguard(apk_path)
+    signatures = analyze_signatures(apk_path)
+    collector.add(
+        ProvenanceRecord(
+            operation="verify.signatures",
+            provider="apex-native",
+            provider_version=__version__,
+            status="ok" if signatures.get("signed") else "ok",
+        )
+    )
+    cross_check = cross_check_with_apksigner(apk_path, signatures)
+    signatures["cross_check"] = cross_check
+    if cross_check.get("status") in {"match", "mismatch"}:
         collector.add(
             ProvenanceRecord(
-                operation="verify.signatures",
-                provider="androguard",
-                provider_version=_androguard_version(),
-                status="fallback",
-                fallback_from="apksigner",
-                reason="apksigner unavailable",
+                operation="verify.signatures.crosscheck",
+                provider="apksigner",
+                provider_version=None,
+                status="ok" if cross_check["status"] == "match" else "error",
+                reason=None
+                if cross_check["status"] == "match"
+                else "; ".join(cross_check.get("differences", [])),
             )
         )
     signing_panel = format_signing_panel(signatures)

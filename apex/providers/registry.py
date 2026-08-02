@@ -10,15 +10,14 @@ from apex.version import __version__
 
 from .runner import (
     INSTALL_HINTS,
+    TOOL_ENV,
+    probe_version,
     resolve_apktool_command,
     resolve_executable,
     resolve_jar_command,
     resolve_java_command,
-    probe_version,
-    TOOL_ENV,
 )
 from .types import ToolInfo
-
 
 CAPABILITY_ORDER: dict[str, list[str]] = {
     "archive.extract": ["rust", "python"],

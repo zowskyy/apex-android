@@ -7,7 +7,6 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
-
 PACKER_HINTS = (
     ("assets/protect", "protector_assets"),
     ("libjiagu", "jiagu"),
