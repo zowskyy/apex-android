@@ -2,6 +2,9 @@ __pycache__/
 *.pyc
 *.pyo
 .pytest_cache/
+.venv/
+.apex-web/
+androguard.db
 apex_out/
 work/
 extracted/

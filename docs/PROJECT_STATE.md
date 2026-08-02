@@ -1,6 +1,27 @@
 # PROJECT_STATE.md — APEX
 
-## Current Phase: Phase 1 — Read-Only Analysis (in progress)
+## Current Phase: Integrated application complete (v0.2.0)
+
+APEX now provides the complete user-facing workflow through both the CLI and
+the loopback web application:
+
+- Fast APK inspection with binary manifest and resource-table metadata
+- Full DEX class/method/string/call-reference indexing
+- DEX → Java decompilation with readable Dalvik output
+- Safe decode and lossless raw rebuild, plus optional apktool resource rebuild
+- Optional APK signing through Android `apksigner`
+- APK structure/DEX/signature verification and zero-edit round-trip validation
+- Static security scanning, semantic APK diff, framework diagnostics, and
+  ProGuard/R8 class mapping support
+- JSON and HTML reports, SQLite/PostgreSQL report storage, and an interactive
+  local web interface
+- Pip-installable package, CLI entry point, MIT license, and end-to-end tests
+
+Mature Android-format handling is provided by Androguard 4.1.4 while the
+existing native Rust ZIP and DEX implementations remain tested components.
+Compiled XML/resource edits intentionally use apktool when available; the
+built-in raw backend never misrepresents extracted binary data as recompilable
+source.
 
 ## Completed Slices
 - 0.3 — Core engine + 10-test suite, all passing on Windows (commit 9703652)
@@ -91,11 +112,21 @@
   workspace: 20 Rust tests passing.
 
 ## Next Slice
-1.6 (continued) — real SSA form (phi-node insertion at join blocks, using
-the now-correct predecessor lists) and def-use tracking, building directly
-on the CFG above. Then 1.2 (resources.arsc) and 1.3 (binary XML) remain
-open in parallel — order between them is free, 1.5 was pulled forward
-opportunistically because of the dex-hybrid review.
+
+Competitive hardening based on the audited 2026 strategy (second-pass
+confirmed against live stack + APKLab/RevEng/MASTG/apktool 3.0/Play policy):
+
+1. Provider abstraction with provenance
+2. Official-tool adapters (`apksigner`, `apkanalyzer`, `jadx`, `apktool`, `bundletool`)
+3. Doctor expansion (report missing engines + install hints)
+4. First connected-device local corpus slices
+
+Execution details are now fixed in `docs/IMPLEMENTATION_GUIDE.md`; use the
+unique `F`/`T`/`D`/`I`/`U` slice identifiers in `docs/ROADMAP.md`.
+
+Housekeeping noted by second-pass audit: `networkx` is declared but unused;
+drop or defer until call-graph work lands. Blueprint “replace jadx/apktool”
+language was aligned to wrap-first orchestration.
 
 ## Blockers
 - None.
@@ -144,18 +175,22 @@ is confirmed as a legally-reusable reference/stopgap for exactly the
 Kotlin-metadata-recovery + Ktor/Apollo/Koin API-extraction capability
 discussed for APEX. Its `recover-kotlin-names.sh` technique (mine
 `@DebugMetadata`/`@Metadata` d2 strings that R8 can't strip) is sound and
-directly portable. Plan: wrap it as an interim jadx-based stopgap (per the
-Risk Register's own "wrap jadx-core initially, replace incrementally"),
-then move the technique into `core/dex_parser`'s own annotation-parsing
-once that exists (annotations_off is already captured per class_def, just
-not parsed yet). If reused, must keep its LICENSE/attribution per
+directly portable. Plan: wrap jadx as the preferred Java provider (CLI/
+subprocess with provenance), keep Androguard as fallback, and only later
+consider porting Kotlin-metadata techniques into `core/dex_parser` once
+annotation parsing exists (annotations_off is already captured per class_def,
+just not parsed yet). If reused, must keep its LICENSE/attribution per
 Apache-2.0 terms — not yet done since nothing's been copied in yet.
 
 ## Key Decisions
 - Tool name: APEX (Android Package EXaminer)
 - License: MIT
-- Core parsers: Rust (via PyO3)
+- Core parsers: Rust (via PyO3) for proven hot paths; Androguard for production metadata/DEX today
 - CLI + build pipeline: Python
-- GUI: deferred to Phase 4
-- DEX decompiler: wrap jadx-core initially, replace incrementally
-- Resource compiler: wrap aapt2 initially, replace incrementally
+- GUI: local web UI shipped in v0.2; deeper GUI polish continues
+- Java decompile: **jadx preferred provider** (to integrate); Androguard DAD is current fallback/default
+- Compiled-resource rebuild: **apktool 3.x** wrapper; raw backend for lossless archive round-trips
+- Signing truth: **apksigner** oracle; Androguard cert counts are interim
+- AAB: **bundletool** wrapper first
+- Device inventory: **ADB first**; companion app policy-aware later
+- Native jadx/apktool replacement: research horizon only, not v0.3 beat criterion
