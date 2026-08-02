@@ -835,6 +835,7 @@ def doctor() -> dict[str, Any]:
         "edition": __import__("apex.edition", fromlist=["edition_info"]).edition_info(),
         "androguard": androguard_version,
         "native_zip": __import__("apex.analysis", fromlist=["_native_zip"])._native_zip is not None,
+        "native_dex": __import__("apex.analysis", fromlist=["_native_dex"])._native_dex is not None,
         "tools": tools,
         "ready": androguard_version is not None,
     }

@@ -14,9 +14,9 @@ pip install -e .
 ```
 
 The Python package uses [Androguard](https://github.com/androguard/androguard)
-for production AXML, ARSC, DEX, and Java decompilation. The included
-`apex_zip_reader` Rust extension is used automatically when installed;
-otherwise the bounded Python extractor enforces the same path policy.
+for production AXML, ARSC, and Java decompilation. The included
+`apex_zip_reader` and `apex_dex_reader` Rust extensions are used automatically
+when installed; otherwise bounded Python/Androguard fallbacks apply.
 
 Optional tools expand rebuild support:
 

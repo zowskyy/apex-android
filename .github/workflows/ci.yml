@@ -20,6 +20,7 @@ jobs:
           pip install -e ".[dev,mcp]"
           pip install maturin
           maturin develop --release -m core/zip_reader/Cargo.toml
+          maturin develop --release -m core/dex_reader/Cargo.toml
       - name: Ruff
         run: ruff check apex tests
       - name: Pytest

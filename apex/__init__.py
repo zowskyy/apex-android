@@ -2,6 +2,7 @@
 
 from .analysis import (
     ApexError,
+    _native_dex,
     _native_zip,
     build_crossrefs,
     build_reachability,
@@ -46,6 +47,7 @@ __all__ = [
     "Feature",
     "PostgresStore",
     "SQLiteStore",
+    "_native_dex",
     "_native_zip",
     "analyze",
     "analyze_apk",

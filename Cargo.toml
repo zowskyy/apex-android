@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["core/zip_reader", "core/dex_parser"]
+members = ["core/zip_reader", "core/dex_parser", "core/dex_reader"]
 
 [workspace.package]
 version = "0.1.0"

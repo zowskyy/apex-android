@@ -35,6 +35,11 @@ try:
 except Exception:  # pragma: no cover - pure Python fallback is tested
     _native_zip = None
 
+try:
+    import apex_dex_reader as _native_dex
+except Exception:  # pragma: no cover - Androguard fallback is tested
+    _native_dex = None
+
 
 MAX_ZIP_NAME = 4096
 MAX_ENTRY_SIZE = 512 * 1024 * 1024
@@ -337,6 +342,11 @@ def load_dex(raw: bytes, with_decompiler: bool = False) -> tuple[Any, Any]:
 
 
 def dex_metadata(raw: bytes, dex_name: str = "classes.dex") -> dict[str, Any]:
+    if _native_dex is not None:
+        try:
+            return dict(_native_dex.dex_metadata(raw, dex_name))
+        except Exception:
+            pass
     dex, analysis = load_dex(raw)
     classes: list[dict[str, Any]] = []
     methods: list[dict[str, Any]] = []
