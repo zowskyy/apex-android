@@ -65,6 +65,24 @@ Open the printed URL (e.g. `http://192.168.1.42:8765`) on your phone, tap
 The server binds to `127.0.0.1:8765` by default for local-only use. Uploaded
 APKs and generated source remain in the configured local workspace.
 
+### App wrappers (all platforms)
+
+| System | Launcher |
+|--------|----------|
+| Windows | `wrappers\windows\apex-gui.bat` · `apex-mobile.bat` |
+| macOS | `wrappers/macos/apex-gui.command` · build `.app` with `create-apps.sh` |
+| Linux | `wrappers/linux/apex-gui.sh` · desktop entries via `install.sh` |
+| Android | WebView client APK: `wrappers/android/build.sh` |
+| iOS | Safari + Add to Home Screen ([wrappers/ios/README.md](wrappers/ios/README.md)) |
+| Docker | `wrappers/docker/run.sh` |
+
+```bash
+apex wrapper list      # paths for your OS
+apex wrapper install   # venv + desktop shortcuts / .app bundles
+```
+
+Full matrix: [wrappers/README.md](wrappers/README.md)
+
 ## Decode and build backends
 
 ### Raw backend
