@@ -21,6 +21,8 @@ from typing import Any, Iterator
 
 from jinja2 import Template
 
+from apex.intel.detect import detect_android, summarize_detections
+from apex.intel.privacy_posture import assess_posture
 from apex.permissions.enrich import enrich_declared
 from apex.permissions.linkage import link_permissions_to_dex
 from apex.providers.apkanalyzer import benchmark_apk
@@ -33,6 +35,9 @@ from apex.providers.jadx import decompile_apk_jadx, decompile_class_androguard_f
 from apex.providers.preflight import preflight_apk
 from apex.providers.registry import doctor_report, get_registry
 from apex.providers.types import ProvenanceCollector, ProvenanceRecord, attach_provenance
+from apex.reporting.sbom import build_sbom
+from apex.security.rules import annotate as annotate_rule
+from apex.security.secrets import scan_secrets
 from apex.signing.display import format_signing_panel
 from apex.signing.native import analyze_signatures, cross_check_with_apksigner
 from apex.version import __version__
@@ -191,6 +196,35 @@ def analyze_apk(
         dex.get("methods", []),
     )
     benchmarks = {"apkanalyzer": benchmark_apk(apk_path)}
+
+    class_names = [cls.get("name", "") for cls in dex.get("classes", []) if cls.get("name")]
+    detections = detect_android(class_names)
+    intelligence = summarize_detections(detections)
+    secrets = scan_secrets(dex.get("strings", []), source="dex-strings")
+    cleartext = bool(manifest.get("uses_cleartext_traffic"))
+    privacy_posture = assess_posture(
+        platform="android",
+        permissions=manifest.get("permissions", []),
+        detections=detections,
+        cleartext=cleartext,
+    )
+    sbom = build_sbom(
+        {
+            "name": manifest.get("package") or apk_path.stem,
+            "version": manifest.get("version_name") or manifest.get("version_code") or "0",
+            "platform": "android",
+            "sha256": sha256_file(apk_path),
+        },
+        detections,
+    )
+    collector.add(
+        ProvenanceRecord(
+            operation="intelligence.trackers",
+            provider="apex-signatures",
+            provider_version=None,
+            status="ok",
+        )
+    )
     report = {
         "schema_version": 3,
         "meta": {
@@ -214,6 +248,7 @@ def analyze_apk(
                 ],
             },
             "preflight": preflight_apk(apk_path),
+            "secrets": [annotate_rule(dict(item)) for item in secrets],
         },
         "resources": {
             **resources,
@@ -224,6 +259,9 @@ def analyze_apk(
         "dex": dex,
         "crossrefs": crossrefs,
         "reachability": reachability,
+        "intelligence": intelligence,
+        "privacy_posture": privacy_posture,
+        "sbom": sbom,
         "bundle": bundle,
         "benchmarks": benchmarks,
     }
@@ -247,6 +285,169 @@ def _androguard_version() -> str | None:
 
 # Backward-compatible public function name.
 analyze = analyze_apk
+
+
+def analyze_ios(ipa_path: Path, out_dir: Path) -> dict[str, Any]:
+    """Analyze an iOS ``.ipa``: binary hardening, trackers, privacy posture."""
+    from apex.ios.ipa import inspect_ipa
+
+    ipa_path, out_dir = Path(ipa_path), Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    report = inspect_ipa(ipa_path)
+    detections = list(report.get("trackers", [])) + list(report.get("libraries", []))
+    ats_insecure = any(
+        f.get("category") == "ios-transport-security" for f in report.get("findings", [])
+    )
+    report["schema_version"] = 3
+    report["privacy_posture"] = assess_posture(
+        platform="ios",
+        permissions=[],
+        detections=detections,
+        cleartext=ats_insecure,
+        privacy_manifest=report.get("privacy_manifest"),
+    )
+    report["sbom"] = build_sbom(
+        {
+            "name": report.get("app", {}).get("bundle_id") or ipa_path.stem,
+            "version": report.get("app", {}).get("version") or "0",
+            "platform": "ios",
+            "sha256": report.get("sha256", ""),
+        },
+        detections,
+    )
+    report["apex_version"] = __version__
+    (out_dir / "report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+    return report
+
+
+def analyze_any(path: Path, out_dir: Path) -> dict[str, Any]:
+    """Dispatch to the Android or iOS analyzer based on file type."""
+    from apex.ios.ipa import is_ipa
+
+    path = Path(path)
+    if is_ipa(path):
+        return analyze_ios(path, out_dir)
+    return analyze_apk(path, out_dir)
+
+
+def generate_sbom(path: Path, out: Path | None = None) -> dict[str, Any]:
+    """Produce a CycloneDX SBOM for an Android or iOS application."""
+    from apex.ios.ipa import inspect_ipa, is_ipa
+
+    path = Path(path)
+    if is_ipa(path):
+        report = inspect_ipa(path)
+        detections = list(report.get("trackers", [])) + list(report.get("libraries", []))
+        app = {
+            "name": report.get("app", {}).get("bundle_id") or path.stem,
+            "version": report.get("app", {}).get("version") or "0",
+            "platform": "ios",
+            "sha256": report.get("sha256", ""),
+        }
+    else:
+        info = inspect_apk(path)
+        manifest = info.get("manifest", {})
+        class_names = _apk_class_names(path)
+        detections = detect_android(class_names)
+        app = {
+            "name": manifest.get("package") or path.stem,
+            "version": manifest.get("version_name") or manifest.get("version_code") or "0",
+            "platform": "android",
+            "sha256": info.get("sha256", ""),
+        }
+    sbom = build_sbom(app, detections)
+    if out is not None:
+        Path(out).write_text(json.dumps(sbom, indent=2), encoding="utf-8")
+    return sbom
+
+
+def scan_trackers(path: Path) -> dict[str, Any]:
+    """Detect trackers and third-party libraries in an Android or iOS app."""
+    from apex.ios.ipa import inspect_ipa, is_ipa
+
+    path = Path(path)
+    if is_ipa(path):
+        report = inspect_ipa(path)
+        detections = list(report.get("trackers", [])) + list(report.get("libraries", []))
+        platform = "ios"
+    else:
+        detections = detect_android(_apk_class_names(path))
+        platform = "android"
+    summary = summarize_detections(detections)
+    summary["platform"] = platform
+    summary["path"] = str(path)
+    return summary
+
+
+def privacy_report(path: Path) -> dict[str, Any]:
+    """Fast cross-platform privacy posture without a full analysis pass."""
+    from apex.ios.ipa import inspect_ipa, is_ipa
+
+    path = Path(path)
+    if is_ipa(path):
+        report = inspect_ipa(path)
+        detections = list(report.get("trackers", [])) + list(report.get("libraries", []))
+        ats_insecure = any(
+            f.get("category") == "ios-transport-security" for f in report.get("findings", [])
+        )
+        posture = assess_posture(
+            platform="ios",
+            permissions=[],
+            detections=detections,
+            cleartext=ats_insecure,
+            privacy_manifest=report.get("privacy_manifest"),
+        )
+        return {
+            "platform": "ios",
+            "path": str(path),
+            "app": report.get("app", {}),
+            "intelligence": summarize_detections(detections),
+            "privacy_manifest": report.get("privacy_manifest"),
+            "privacy_posture": posture,
+        }
+    info = inspect_apk(path)
+    manifest = info.get("manifest", {})
+    detections = detect_android(_apk_class_names(path))
+    posture = assess_posture(
+        platform="android",
+        permissions=manifest.get("permissions", []),
+        detections=detections,
+        cleartext=bool(manifest.get("uses_cleartext_traffic")),
+    )
+    return {
+        "platform": "android",
+        "path": str(path),
+        "app": {
+            "package": manifest.get("package", ""),
+            "version": manifest.get("version_name", ""),
+        },
+        "intelligence": summarize_detections(detections),
+        "privacy_posture": posture,
+    }
+
+
+def _apk_class_names(apk_path: Path) -> list[str]:
+    """Extract dotted class names from an APK's DEX files (best effort)."""
+    apk_path = Path(apk_path)
+    names: list[str] = []
+    try:
+        with zipfile.ZipFile(apk_path) as archive:
+            dex_names = [
+                n
+                for n in archive.namelist()
+                if Path(n).name.startswith("classes") and n.endswith(".dex")
+            ]
+            for dex_name in dex_names:
+                try:
+                    index = dex_metadata(archive.read(dex_name), dex_name)
+                    names.extend(
+                        cls.get("name", "") for cls in index.get("classes", []) if cls.get("name")
+                    )
+                except Exception:
+                    continue
+    except (OSError, zipfile.BadZipFile):
+        return names
+    return names
 
 
 def _safe_source_path(class_name: str, suffix: str) -> Path:
@@ -756,8 +957,47 @@ def security_scan(apk_path: Path) -> dict[str, Any]:
                                     "message": "application data may be included in backups",
                                 }
                             )
+                        for tag in ("activity", "service", "receiver", "provider"):
+                            for node in application.findall(tag):
+                                exported = node.attrib.get(f"{ANDROID_NS}exported", "").lower()
+                                has_permission = bool(
+                                    node.attrib.get(f"{ANDROID_NS}permission")
+                                )
+                                name = node.attrib.get(f"{ANDROID_NS}name", tag)
+                                if exported == "true" and not has_permission:
+                                    findings.append(
+                                        {
+                                            "severity": "medium",
+                                            "category": "exported-component",
+                                            "evidence": f"{tag}:{name}",
+                                            "message": (
+                                                f"exported {tag} '{name}' has no guarding "
+                                                "permission"
+                                            ),
+                                        }
+                                    )
                 except Exception:
                     pass
+            for nsc_name in [n for n in names if "network_security_config" in n.lower()]:
+                try:
+                    text = decode_binary_xml(archive.read(nsc_name))
+                    if 'cleartextTrafficPermitted="true"' in text:
+                        findings.append(
+                            {
+                                "severity": "medium",
+                                "category": "network-security-config",
+                                "evidence": nsc_name,
+                                "message": "network security config permits cleartext traffic",
+                            }
+                        )
+                except Exception:
+                    pass
+            secret_sources: list[str] = []
+            if "resources.arsc" in names:
+                secret_sources.extend(
+                    value for _, value in _iter_arsc_strings(archive.read("resources.arsc"))
+                )
+            findings.extend(scan_secrets(secret_sources, source="resources"))
     except (OSError, zipfile.BadZipFile) as exc:
         return {
             "verdict": "INVALID",
@@ -765,6 +1005,7 @@ def security_scan(apk_path: Path) -> dict[str, Any]:
             "findings": [{"severity": "critical", "category": "archive", "message": str(exc)}],
         }
 
+    findings = [annotate_rule(item) for item in findings]
     order = {"low": 1, "medium": 2, "high": 3, "critical": 4}
     highest = max((order[item["severity"]] for item in findings), default=0)
     verdict = "HIGH_RISK" if highest >= 3 else ("REVIEW" if findings else "CLEAN")
@@ -866,7 +1107,11 @@ def framework_check(apk_path: Path) -> dict[str, Any]:
 
 
 def doctor() -> dict[str, Any]:
-    return doctor_report()
+    from apex.intel.signatures import signature_stats
+
+    report = doctor_report()
+    report["signatures"] = signature_stats()
+    return report
 
 
 def export_icon(apk_path: Path, output: Path) -> dict[str, Any]:

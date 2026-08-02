@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from apex.security.rules import rule_metadata
 from apex.version import __version__
 
 SARIF_SCHEMA = "https://json.schemastore.org/sarif-2.1.0.json"
@@ -54,14 +55,12 @@ RULE_METADATA: dict[str, dict[str, str]] = {
 
 
 def _rule_for(category: str) -> dict[str, Any]:
-    meta = RULE_METADATA.get(
-        category,
-        {
-            "name": category.replace("-", " ").title().replace(" ", ""),
-            "description": f"APEX static finding in category {category}.",
-            "cwe": "CWE-noinfo",
-        },
-    )
+    meta = dict(RULE_METADATA.get(category, {}))
+    shared = rule_metadata(category)
+    meta.setdefault("name", shared["name"])
+    meta.setdefault("description", shared["description"])
+    meta.setdefault("cwe", shared["cwe"])
+    masvs = shared.get("masvs", "MASVS-CODE-1")
     return {
         "id": f"apex/{category}",
         "name": meta["name"],
@@ -72,7 +71,11 @@ def _rule_for(category: str) -> dict[str, Any]:
                 "findings are not a malware verdict."
             )
         },
-        "properties": {"tags": ["security", "android", meta["cwe"]]},
+        "properties": {
+            "tags": ["security", "mobile", meta["cwe"], masvs],
+            "cwe": meta["cwe"],
+            "masvs": masvs,
+        },
         "defaultConfiguration": {"level": "warning"},
     }
 
@@ -95,6 +98,8 @@ def security_scan_to_sarif(scan: dict[str, Any]) -> dict[str, Any]:
             "properties": {
                 "apexSeverity": severity,
                 "evidence": finding.get("evidence", ""),
+                "cwe": finding.get("cwe", rule_metadata(category)["cwe"]),
+                "masvs": finding.get("masvs", rule_metadata(category)["masvs"]),
                 "verdictDisclaimer": scan.get("disclaimer", ""),
             },
         }

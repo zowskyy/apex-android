@@ -79,6 +79,47 @@ fn read_entries(py: Python<'_>, apk_path: &str) -> PyResult<Vec<Py<PyAny>>> {
     Ok(results)
 }
 
+/// List every entry using a columnar layout: one dict of parallel arrays
+/// instead of one dict per entry. This removes the per-entry FFI overhead
+/// (8 `set_item` calls x N entries) that made the row-oriented `read_entries`
+/// slower than Python's `zipfile.infolist()`. Callers that need per-entry
+/// dicts assemble them in pure Python, which avoids crossing the FFI boundary
+/// N times. `safe` reflects path safety only (name sanitization), independent
+/// of the size-bomb caps, matching `sanitized_zip_name` semantics.
+#[pyfunction]
+fn read_inventory(py: Python<'_>, apk_path: &str) -> PyResult<Py<PyAny>> {
+    let mut archive = open_archive(apk_path).map_err(PyErr::from)?;
+    let n = archive.len();
+    let mut names: Vec<String> = Vec::with_capacity(n);
+    let mut sizes: Vec<u64> = Vec::with_capacity(n);
+    let mut compressed: Vec<u64> = Vec::with_capacity(n);
+    let mut crcs: Vec<u32> = Vec::with_capacity(n);
+    let mut safe: Vec<bool> = Vec::with_capacity(n);
+
+    for i in 0..n {
+        let zfile = archive
+            .by_index_raw(i)
+            .map_err(ApexZipError::from)
+            .map_err(PyErr::from)?;
+        let raw_name = zfile.name().to_string();
+        let name_check = sanitize::check_name(&raw_name);
+        safe.push(name_check.sanitized_name.is_some());
+        names.push(raw_name);
+        sizes.push(zfile.size());
+        compressed.push(zfile.compressed_size());
+        crcs.push(zfile.crc32());
+    }
+
+    let dict = PyDict::new(py);
+    dict.set_item("names", names)?;
+    dict.set_item("sizes", sizes)?;
+    dict.set_item("compressed_sizes", compressed)?;
+    dict.set_item("crc32", crcs)?;
+    dict.set_item("safe", safe)?;
+    dict.set_item("entry_count", n)?;
+    Ok(dict.into_any().unbind())
+}
+
 /// Extract a ZIP/APK to `dest_dir`, sanitizing every entry name and
 /// refusing (not extracting, not renaming) any entry that fails
 /// path-traversal, absolute-path, or size-bound checks. Returns a report
@@ -194,6 +235,7 @@ fn extract_apk(py: Python<'_>, apk_path: &str, dest_dir: &str) -> PyResult<Py<Py
 #[pymodule]
 fn apex_zip_reader(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(read_entries, m)?)?;
+    m.add_function(wrap_pyfunction!(read_inventory, m)?)?;
     m.add_function(wrap_pyfunction!(extract_apk, m)?)?;
     Ok(())
 }

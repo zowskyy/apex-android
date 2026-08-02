@@ -7,15 +7,35 @@ from typing import Any
 
 from apex.corpus.stats import corpus_stats
 from apex.device.sync import list_connected, sync_device
-from apex.workflows import analyze_apk, decompile_apk, doctor, export_bundle, export_icon
+from apex.workflows import (
+    analyze_any,
+    decompile_apk,
+    doctor,
+    export_bundle,
+    export_icon,
+    generate_sbom,
+    privacy_report,
+    scan_trackers,
+)
 
 
 class AnalysisService:
     def inspect_bundle(self, apk_path: Path, out_dir: Path) -> dict[str, Any]:
-        return analyze_apk(apk_path, out_dir)
+        return analyze_any(apk_path, out_dir)
 
     def decompile(self, apk_path: Path, out_dir: Path, *, provider: str = "auto") -> dict[str, Any]:
         return decompile_apk(apk_path, out_dir, provider=provider)
+
+
+class IntelService:
+    def trackers(self, path: Path) -> dict[str, Any]:
+        return scan_trackers(path)
+
+    def sbom(self, path: Path) -> dict[str, Any]:
+        return generate_sbom(path)
+
+    def privacy(self, path: Path) -> dict[str, Any]:
+        return privacy_report(path)
 
 
 class DeviceService:

@@ -163,6 +163,8 @@ def _manifest_summary(raw: bytes) -> dict[str, Any]:
         "providers": [],
         "main_activity": "",
         "debuggable": False,
+        "uses_cleartext_traffic": False,
+        "allow_backup": True,
     }
     try:
         root = ET.fromstring(_xml_bytes(raw))
@@ -193,6 +195,12 @@ def _manifest_summary(raw: bytes) -> dict[str, Any]:
         return result
     result["debuggable"] = (
         application.attrib.get(f"{ANDROID_NS}debuggable", "false").lower() == "true"
+    )
+    result["uses_cleartext_traffic"] = (
+        application.attrib.get(f"{ANDROID_NS}usesCleartextTraffic", "false").lower() == "true"
+    )
+    result["allow_backup"] = (
+        application.attrib.get(f"{ANDROID_NS}allowBackup", "true").lower() == "true"
     )
 
     component_map = {
@@ -491,7 +499,45 @@ def build_reachability(
     }
 
 
+def _zip_inventory_native(apk_path: Path) -> dict[str, Any] | None:
+    """Fast columnar inventory via the Rust reader (one FFI crossing).
+
+    Returns ``None`` when the native extension is unavailable so the caller can
+    fall back to the pure-Python path.
+    """
+    if _native_zip is None or not hasattr(_native_zip, "read_inventory"):
+        return None
+    try:
+        columns = _native_zip.read_inventory(str(apk_path))
+    except Exception:
+        return None
+    names = columns["names"]
+    sizes = columns["sizes"]
+    compressed = columns["compressed_sizes"]
+    crcs = columns["crc32"]
+    safe = columns["safe"]
+    files = [
+        {
+            "name": names[i],
+            "size": sizes[i],
+            "compressed_size": compressed[i],
+            "crc32": f"{crcs[i]:08x}",
+            "safe": bool(safe[i]),
+        }
+        for i in range(len(names))
+    ]
+    return {
+        "entry_count": len(files),
+        "uncompressed_bytes": sum(sizes),
+        "compressed_bytes": sum(compressed),
+        "files": files,
+    }
+
+
 def zip_inventory(apk_path: Path) -> dict[str, Any]:
+    native = _zip_inventory_native(apk_path)
+    if native is not None:
+        return native
     files: list[dict[str, Any]] = []
     with zipfile.ZipFile(apk_path) as archive:
         for info in archive.infolist():

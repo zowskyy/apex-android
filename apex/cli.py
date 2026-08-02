@@ -22,6 +22,7 @@ from apex.workflows import (
     PostgresStore,
     SQLiteStore,
     analyze_apk,
+    analyze_ios,
     build_project,
     decode_apk,
     decompile_apk,
@@ -30,7 +31,10 @@ from apex.workflows import (
     export_bundle,
     export_icon,
     framework_check,
+    generate_sbom,
+    privacy_report,
     roundtrip_verify,
+    scan_trackers,
     security_scan,
     verify_apk,
 )
@@ -137,6 +141,26 @@ def build_parser() -> argparse.ArgumentParser:
     signing_cmd.add_argument("apk")
     signing_cmd.add_argument("--output", "-o")
 
+    trackers_cmd = sub.add_parser(
+        "trackers", help="detect trackers and third-party libraries (APK or IPA)"
+    )
+    trackers_cmd.add_argument("app")
+    trackers_cmd.add_argument("--output", "-o")
+
+    sbom_cmd = sub.add_parser("sbom", help="generate a CycloneDX SBOM (APK or IPA)")
+    sbom_cmd.add_argument("app")
+    sbom_cmd.add_argument("--out", help="write CycloneDX JSON to a file")
+
+    privacy_cmd = sub.add_parser(
+        "privacy", help="cross-platform privacy posture (APK or IPA)"
+    )
+    privacy_cmd.add_argument("app")
+    privacy_cmd.add_argument("--output", "-o")
+
+    ios_cmd = sub.add_parser("ios", help="analyze an iOS .ipa (Mach-O, privacy, trackers)")
+    ios_cmd.add_argument("ipa")
+    ios_cmd.add_argument("--out", default="apex_ios_out")
+
     icon_cmd = sub.add_parser("icon", help="export launcher icon from an APK")
     icon_cmd.add_argument("apk")
     icon_cmd.add_argument("-o", "--output", default="icon.png")
@@ -184,7 +208,20 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         if args.command == "inspect":
-            _print(inspect_apk(Path(args.apk), include_files=args.files), args.output)
+            path = Path(args.apk)
+            if path.suffix.lower() == ".ipa":
+                from apex.ios.ipa import inspect_ipa
+
+                _print(inspect_ipa(path), args.output)
+            else:
+                _print(inspect_apk(path, include_files=args.files), args.output)
+        elif args.command == "analyze" and Path(args.apk).suffix.lower() == ".ipa":
+            report = analyze_ios(Path(args.apk), Path(args.out))
+            print(f"JSON report: {Path(args.out) / 'report.json'}")
+            print(
+                f"Trackers: {len(report.get('trackers', []))} · "
+                f"Posture: {report['privacy_posture']['grade']}"
+            )
         elif args.command == "analyze":
             store = (
                 SQLiteStore(Path(args.db))
@@ -258,6 +295,20 @@ def main(argv: list[str] | None = None) -> int:
             native = analyze_signatures(Path(args.apk))
             native["cross_check"] = cross_check_with_apksigner(Path(args.apk), native)
             _print(format_signing_panel(native), args.output)
+        elif args.command == "trackers":
+            _print(scan_trackers(Path(args.app)), args.output)
+        elif args.command == "sbom":
+            _print(generate_sbom(Path(args.app), Path(args.out) if args.out else None))
+        elif args.command == "privacy":
+            _print(privacy_report(Path(args.app)), args.output)
+        elif args.command == "ios":
+            report = analyze_ios(Path(args.ipa), Path(args.out))
+            print(f"JSON report: {Path(args.out) / 'report.json'}")
+            print(
+                f"App: {report['app'].get('bundle_id', '?')} · "
+                f"Trackers: {len(report.get('trackers', []))} · "
+                f"Posture: {report['privacy_posture']['grade']}"
+            )
         elif args.command == "icon":
             _print(export_icon(Path(args.apk), Path(args.output)))
         elif args.command == "export":
