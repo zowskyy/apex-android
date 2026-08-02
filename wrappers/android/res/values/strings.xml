@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">APEX</string>
+    <string name="settings_title">APEX Server</string>
+    <string name="server_hint">http://192.168.1.42:8765</string>
+    <string name="save">Save &amp; open</string>
+    <string name="open_settings">Server URL</string>
+</resources>

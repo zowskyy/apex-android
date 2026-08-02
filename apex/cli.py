@@ -123,6 +123,15 @@ def build_parser() -> argparse.ArgumentParser:
     mobile_cmd.add_argument("--port", type=int, default=8765)
     mobile_cmd.add_argument("--workspace", default=".apex-web")
 
+    wrapper_cmd = sub.add_parser("wrapper", help="list or install platform app wrappers")
+    wrapper_cmd.add_argument(
+        "action",
+        nargs="?",
+        choices=["list", "install"],
+        default="list",
+        help="list available wrappers or run platform installer",
+    )
+
     mcp_cmd = sub.add_parser("mcp", help="start the MCP server for AI assistant integration (Pro)")
     mcp_cmd.add_argument(
         "license_action",
@@ -216,6 +225,21 @@ def main(argv: list[str] | None = None) -> int:
                 Path(args.workspace),
                 open_browser=False,
                 mobile=True,
+            )
+        elif args.command == "wrapper":
+            from .wrappers_info import recommended_wrappers, run_install, wrapper_matrix
+
+            if args.action == "install":
+                return run_install()
+            matrix = wrapper_matrix()
+            recommended = recommended_wrappers()
+            _print(
+                {
+                    "system": sys.platform,
+                    "recommended": {key: matrix[key] for key in recommended if key in matrix},
+                    "all": matrix,
+                    "docs": str(Path(__file__).resolve().parents[1] / "wrappers/README.md"),
+                }
             )
         elif args.command == "mcp":
             if args.license_action == "show-key":

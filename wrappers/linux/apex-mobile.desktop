@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=APEX Mobile
+Comment=APEX phone browser mode (LAN)
+Exec=bash -lc 'wrappers/linux/apex-mobile.sh'
+Path=%k
+Icon=phone
+Terminal=true
+Categories=Development;Security;
+Keywords=android;apk;mobile;phone;
