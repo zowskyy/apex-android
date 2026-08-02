@@ -52,14 +52,18 @@ def test_cve_2026_39973_traversal_blocked(tmp_path: Path):
     assert not (tmp_path.parent / "apex_cve_traversal_marker").exists()
     assert not Path("/tmp/apex_cve_traversal_marker").exists()
 
-    extracted_files = sorted(p.relative_to(extract_dir).as_posix() for p in extract_dir.rglob("*") if p.is_file())
+    extracted_files = sorted(
+        p.relative_to(extract_dir).as_posix() for p in extract_dir.rglob("*") if p.is_file()
+    )
     assert extracted_files == ["AndroidManifest.xml", "res/layout/main.xml"]
 
     warn_names = {e["name"] for e in report["entries"] if e["verdict"] == "WARN"}
     assert "../../../../tmp/apex_cve_traversal_marker" in warn_names
 
 
-@pytest.mark.skipif(apex._native_zip is None, reason="apex_zip_reader native extension not installed")
+@pytest.mark.skipif(
+    apex._native_zip is None, reason="apex_zip_reader native extension not installed"
+)
 def test_extract_benchmark_vs_python_zipfile(realistic_apk: Path, tmp_path: Path):
     """Not the real F-Droid/NewPipe corpus (not present in this checkout —
     see scripts/generate_test_apk.py), but a same-scale substitute (~9MB,

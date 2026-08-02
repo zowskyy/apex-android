@@ -1,6 +1,27 @@
 # PROJECT_STATE.md — APEX
 
-## Current Phase: Phase 1 — Read-Only Analysis (in progress)
+## Current Phase: Integrated application complete (v0.2.0)
+
+APEX now provides the complete user-facing workflow through both the CLI and
+the loopback web application:
+
+- Fast APK inspection with binary manifest and resource-table metadata
+- Full DEX class/method/string/call-reference indexing
+- DEX → Java decompilation with readable Dalvik output
+- Safe decode and lossless raw rebuild, plus optional apktool resource rebuild
+- Optional APK signing through Android `apksigner`
+- APK structure/DEX/signature verification and zero-edit round-trip validation
+- Static security scanning, semantic APK diff, framework diagnostics, and
+  ProGuard/R8 class mapping support
+- JSON and HTML reports, SQLite/PostgreSQL report storage, and an interactive
+  local web interface
+- Pip-installable package, CLI entry point, MIT license, and end-to-end tests
+
+Mature Android-format handling is provided by Androguard 4.1.4 while the
+existing native Rust ZIP and DEX implementations remain tested components.
+Compiled XML/resource edits intentionally use apktool when available; the
+built-in raw backend never misrepresents extracted binary data as recompilable
+source.
 
 ## Completed Slices
 - 0.3 — Core engine + 10-test suite, all passing on Windows (commit 9703652)
@@ -90,12 +111,63 @@
   (no branches) produces a single block with no edges. Clippy clean. Whole
   workspace: 20 Rust tests passing.
 
-## Next Slice
-1.6 (continued) — real SSA form (phi-node insertion at join blocks, using
-the now-correct predecessor lists) and def-use tracking, building directly
-on the CFG above. Then 1.2 (resources.arsc) and 1.3 (binary XML) remain
-open in parallel — order between them is free, 1.5 was pulled forward
-opportunistically because of the dex-hybrid review.
+## Current Phase: v1.0 complete suite delivered
+
+APEX v1.0 ships the whole product. Per `docs/PRINCIPLES.md`, no essential
+capability is held back for a later release.
+
+Delivered:
+- Provider foundation (`F1–F4`): types, bounded runner, registry, schema v3 provenance, doctor v2
+- Tool adapters (`T1–T6`): apktool 3.x, jadx, apkanalyzer, bundletool, preflight, apksigner cross-check
+- Device corpus (`D1–D5`): ADB list/packages/pull/sync, SQLite corpus, statistics
+- Report intelligence (`I1–I6`): permission catalog, granted-state, permission-to-code linkage,
+  full native certificate analysis, icon and bundle export
+- Workstation UX (`U1–U5`): services layer, Devices tab, Corpus dashboard, SARIF, managed tool install
+- Companion (`C`): buildable Kotlin app in `tools/companion/`
+
+### Cross-platform frontier suite (delivered)
+
+Shipped as core capability, not add-ons, wired through workflows, CLI, web UI,
+JSON, and SARIF:
+
+- **Tracker + third-party library detection** (`apex/intel/`): offline bundled
+  signature set matched against Android DEX class prefixes and iOS
+  frameworks/dylibs. No network access.
+- **iOS analysis** (`apex/ios/`): bounded Mach-O parser (PIE, FairPlay
+  encryption, stack canary, ARC, dylibs, code signature), `Info.plist`, and
+  Apple `PrivacyInfo.xcprivacy` privacy-manifest analysis with Required Reason
+  API checks. `.ipa` files auto-route through `inspect`/`analyze`.
+- **CycloneDX 1.5 SBOM** (`apex/reporting/sbom.py`, `apex sbom`).
+- **Secret detection** (`apex/security/secrets.py`): pattern + entropy gated,
+  always redacted before entering findings/reports.
+- **Expanded security rules with MASVS/CWE** (`apex/security/rules.py`):
+  exported components, network security config, cleartext, secrets, iOS ATS and
+  binary hardening — all carried into SARIF.
+- **Unified cross-platform privacy posture** (`apex/intel/privacy_posture.py`):
+  a single graded assessment that correlates declared intent (permissions,
+  privacy manifest) against observed content (trackers, cleartext) and reports
+  declared-vs-actual discrepancies.
+
+### Native optimization promoted from research
+
+`R1` (columnar Rust ZIP inventory FFI) is promoted: `read_inventory` returns one
+dict of parallel arrays instead of one dict per entry, removing the per-entry
+`set_item` overhead that previously made the native metadata path slower than
+`zipfile.infolist()`. `zip_inventory` now uses it with identical output and is
+faster than the pure-Python path on the representative fixture.
+
+### Native capability (no external tool required)
+
+Certificate fingerprints, subject/issuer, validity, and signature schemes are
+computed by `apex/signing/native.py`. Verified byte-for-byte against the JDK's
+`keytool -printcert` on a real jarsigner-signed fixture. `apksigner`, when
+installed, runs only as an independent cross-check and is reported as such.
+
+## Ongoing work
+
+Research only — none of it gates a user-facing capability:
+- `R*` native hot-path promotion (Rust ZIP inventory batching, DEX bridge, ARSC, signing block)
+- Broadening the conformance corpus and live-device matrix as hardware becomes available
 
 ## Blockers
 - None.
@@ -144,18 +216,22 @@ is confirmed as a legally-reusable reference/stopgap for exactly the
 Kotlin-metadata-recovery + Ktor/Apollo/Koin API-extraction capability
 discussed for APEX. Its `recover-kotlin-names.sh` technique (mine
 `@DebugMetadata`/`@Metadata` d2 strings that R8 can't strip) is sound and
-directly portable. Plan: wrap it as an interim jadx-based stopgap (per the
-Risk Register's own "wrap jadx-core initially, replace incrementally"),
-then move the technique into `core/dex_parser`'s own annotation-parsing
-once that exists (annotations_off is already captured per class_def, just
-not parsed yet). If reused, must keep its LICENSE/attribution per
+directly portable. Plan: wrap jadx as the preferred Java provider (CLI/
+subprocess with provenance), keep Androguard as fallback, and only later
+consider porting Kotlin-metadata techniques into `core/dex_parser` once
+annotation parsing exists (annotations_off is already captured per class_def,
+just not parsed yet). If reused, must keep its LICENSE/attribution per
 Apache-2.0 terms — not yet done since nothing's been copied in yet.
 
 ## Key Decisions
 - Tool name: APEX (Android Package EXaminer)
 - License: MIT
-- Core parsers: Rust (via PyO3)
+- Core parsers: Rust (via PyO3) for proven hot paths; Androguard for production metadata/DEX today
 - CLI + build pipeline: Python
-- GUI: deferred to Phase 4
-- DEX decompiler: wrap jadx-core initially, replace incrementally
-- Resource compiler: wrap aapt2 initially, replace incrementally
+- GUI: local web UI shipped in v0.2; deeper GUI polish continues
+- Java decompile: **jadx preferred provider** (to integrate); Androguard DAD is current fallback/default
+- Compiled-resource rebuild: **apktool 3.x** wrapper; raw backend for lossless archive round-trips
+- Signing truth: **apksigner** oracle; Androguard cert counts are interim
+- AAB: **bundletool** wrapper first
+- Device inventory: **ADB first**; companion app policy-aware later
+- Native jadx/apktool replacement: research horizon only, not v0.3 beat criterion

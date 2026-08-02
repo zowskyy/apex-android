@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">APEX Companion</string>
+    <string name="summary_format">%1$d launchable apps on this device</string>
+    <string name="visibility_note">Shows apps you can launch. APEX does not request broad installed-app inventory access. Use desktop ADB sync for complete device coverage.</string>
+    <string name="export">Export APK</string>
+    <string name="close">Close</string>
+    <string name="export_done">Exported %1$d artifact(s) to Downloads/APEX</string>
+    <string name="export_failed">Export failed; the APK could not be read</string>
+</resources>
