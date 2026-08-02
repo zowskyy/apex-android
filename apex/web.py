@@ -16,6 +16,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 from apex.corpus.stats import corpus_packages, corpus_stats
 from apex.device.adb import list_packages
 from apex.device.sync import list_connected, sync_device
+from apex.dex.exceptions import exception_summary_for_dex
 from apex.format_detect import detect_format
 from apex.intel.detect import detect_android, summarize_detections
 from apex.intel.privacy_posture import assess_posture
@@ -105,7 +106,8 @@ $("filename").textContent=i.path.split(/[\\/]/).pop();$("hash").textContent=i.sh
 $("identity").innerHTML=kv("Package",m.package)+kv("Version",`${m.version_name||"?"} (${m.version_code||"?"})`)+kv("SDK",`min ${m.min_sdk||"?"} · target ${m.target_sdk||"?"}`)+kv("Main activity",m.main_activity);
 $("components").innerHTML=pills([...(m.activities||[]),...(m.services||[]),...(m.receivers||[]),...(m.providers||[])]);
 $("permissions").innerHTML=pills(m.permissions||[]);$("findings").innerHTML=s.findings.length?s.findings.map(f=>`<div class="finding ${esc(f.severity)}"><strong>${esc(f.category)}</strong> · ${esc(f.message)}<br><small>${esc(f.evidence||"")} ${f.masvs?`· ${esc(f.masvs)}`:""}</small></div>`).join(""):'<span class="empty">No static security findings.</span>';
-$("technical").innerHTML=kv("Format",(i.format||"apk").toUpperCase())+kv("DEX files",(i.dex_files||[]).join(", ")||"none")+kv("Native ABIs",(i.native_abis||[]).join(", ")||"none")+kv("Resource packages",(i.resource_table?.packages||[]).join(", ")||"none")+kv("Locales",(i.resource_table?.locales||[]).join(", ")||"none");renderSigning(data.signing);renderClasses()}
+const ex=data.exceptions||{};const exText=ex.available?`${ex.try_count||0} try range(s) · ${ex.handler_count||0} handler(s) · ${ex.exception_edges||0} exception edge(s)`:(ex.reason?`unavailable — ${ex.reason}`:"not analyzed");
+$("technical").innerHTML=kv("Format",(i.format||"apk").toUpperCase())+kv("Detected by",(i.format_detection?.evidence||[]).join("; ")||"content")+kv("DEX files",(i.dex_files||[]).join(", ")||"none")+kv("Exception handlers",exText)+kv("Native ABIs",(i.native_abis||[]).join(", ")||"none")+kv("Resource packages",(i.resource_table?.packages||[]).join(", ")||"none")+kv("Locales",(i.resource_table?.locales||[]).join(", ")||"none");renderSigning(data.signing);renderClasses()}
 function renderIos(data){const r=data.ios||{},a=r.app||{},b=r.binary||{},s=data.security;
 $("signingCard").classList.add("hidden");$("decompile").classList.add("hidden");$("permsTitle").textContent="Embedded frameworks";$("componentsTitle").textContent="Privacy manifest";
 $("lblEntries").textContent="FRAMEWORKS";$("lblDex").textContent="LINKED DYLIBS";$("lblPerms").textContent="ARCHITECTURES";
@@ -182,6 +184,7 @@ class ApexWebHandler(BaseHTTPRequestHandler):
                 f"({', '.join(detected.evidence) or 'no evidence'})"
             )
         dex = {"classes": [], "methods": [], "edges": [], "errors": []}
+        exceptions: dict[str, object] = {}
         with zipfile.ZipFile(resolved) as archive:
             for name in sorted(
                 item
@@ -194,6 +197,27 @@ class ApexWebHandler(BaseHTTPRequestHandler):
                         dex[key].extend(metadata[key])
                 except Exception as exc:
                     dex["errors"].append({"dex": name, "error": str(exc)})
+                try:
+                    summary = exception_summary_for_dex(archive.read(name))
+                    if summary.get("available") and summary.get("valid"):
+                        for key in (
+                            "try_count",
+                            "handler_count",
+                            "exception_edges",
+                            "methods_with_handlers",
+                        ):
+                            exceptions[key] = exceptions.get(key, 0) + int(
+                                summary.get(key, 0)
+                            )
+                        exceptions["available"] = True
+                    else:
+                        exceptions.setdefault("available", False)
+                        exceptions.setdefault(
+                            "reason", summary.get("reason", "unavailable")
+                        )
+                except Exception as exc:
+                    exceptions.setdefault("available", False)
+                    exceptions.setdefault("reason", str(exc))
         native = analyze_signatures(resolved)
         native["cross_check"] = cross_check_with_apksigner(resolved, native)
         info = inspect_apk(resolved)
@@ -214,6 +238,7 @@ class ApexWebHandler(BaseHTTPRequestHandler):
             "security": security_scan(resolved),
             "signing": format_signing_panel(native),
             "dex": dex,
+            "exceptions": exceptions,
             "intelligence": summarize_detections(detections),
             "privacy_posture": posture,
         }

@@ -21,6 +21,7 @@ from typing import Any, Iterator
 
 from jinja2 import Template
 
+from apex.dex.exceptions import scan_exceptions
 from apex.intel.detect import detect_android, summarize_detections
 from apex.intel.privacy_posture import assess_posture
 from apex.jni.xref import build_jni_graph
@@ -187,6 +188,7 @@ def analyze_apk(
     )
     native = scan_native_libs(extract_dir, keep_abi)
     dex = scan_dex_metadata(extract_dir)
+    dex["exceptions"] = scan_exceptions(extract_dir)
     jni_graph = build_jni_graph(dex, native, extract_dir)
     collector.add(
         ProvenanceRecord(
@@ -387,6 +389,24 @@ def scan_trackers(path: Path) -> dict[str, Any]:
     summary["platform"] = platform
     summary["path"] = str(path)
     return summary
+
+
+def exceptions_report(apk_path: Path, work_dir: Path | None = None) -> dict[str, Any]:
+    """Report try/catch structure for every method in an APK or bare DEX."""
+    import tempfile
+
+    apk_path = Path(apk_path)
+    if apk_path.suffix.lower() == ".dex":
+        from apex.dex.exceptions import exception_summary_for_dex
+
+        result = exception_summary_for_dex(apk_path.read_bytes())
+        result["source"] = str(apk_path)
+        return result
+    root = Path(work_dir) if work_dir else Path(tempfile.mkdtemp(prefix="apex-exc-"))
+    extract_dir, _ = extract_apk(apk_path, root)
+    result = scan_exceptions(extract_dir)
+    result["source"] = str(apk_path)
+    return result
 
 
 def jni_report(apk_path: Path, work_dir: Path | None = None) -> dict[str, Any]:

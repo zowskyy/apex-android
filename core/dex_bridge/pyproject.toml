@@ -1,0 +1,13 @@
+[build-system]
+requires = ["maturin>=1.14,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "apex-dex-bridge"
+version = "0.1.0"
+requires-python = ">=3.9"
+
+[tool.maturin]
+bindings = "pyo3"
+module-name = "apex_dex_bridge"
+manifest-path = "Cargo.toml"

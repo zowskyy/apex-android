@@ -62,4 +62,31 @@ impl<'a> DexReader<'a> {
         }
         Ok((result, pos - offset))
     }
+
+    /// Read a SLEB128 value starting at `offset`. Returns (value, bytes_consumed).
+    /// `encoded_catch_handler.size` is SLEB128 and its *sign* carries meaning:
+    /// a non-positive size means the typed handlers are followed by a
+    /// catch-all handler. Reading it as unsigned silently loses the catch-all.
+    pub fn sleb128_at(&self, offset: usize) -> Result<(i32, usize)> {
+        let mut result: i32 = 0;
+        let mut shift: u32 = 0;
+        let mut pos = offset;
+        loop {
+            if shift >= 35 {
+                return Err(DexError::MalformedUleb128(offset));
+            }
+            let byte = self.u8_at(pos)?;
+            pos += 1;
+            result |= ((byte & 0x7f) as i32) << shift;
+            shift += 7;
+            if byte & 0x80 == 0 {
+                // Sign-extend when the final byte's sign bit (0x40) is set.
+                if shift < 32 && (byte & 0x40) != 0 {
+                    result |= -(1i32 << shift);
+                }
+                break;
+            }
+        }
+        Ok((result, pos - offset))
+    }
 }

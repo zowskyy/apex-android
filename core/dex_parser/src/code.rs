@@ -48,6 +48,142 @@ pub fn parse_code_item(r: &DexReader, code_off: u32) -> Result<CodeItem> {
     Ok(CodeItem { registers_size, ins_size, outs_size, tries_size, debug_info_off, insns })
 }
 
+/// One entry of the `try_item` array: a protected instruction range and the
+/// byte offset of its handler within the `encoded_catch_handler_list`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TryItem {
+    /// First protected instruction, in 16-bit code units.
+    pub start_addr: u32,
+    /// Number of protected code units.
+    pub insn_count: u16,
+    /// Byte offset from the start of the handler list (NOT an index).
+    pub handler_off: u16,
+}
+
+impl TryItem {
+    /// One past the last protected code unit.
+    pub fn end_addr(&self) -> u32 {
+        self.start_addr + self.insn_count as u32
+    }
+
+    pub fn covers(&self, addr: u32) -> bool {
+        addr >= self.start_addr && addr < self.end_addr()
+    }
+}
+
+/// One `encoded_catch_handler`: typed handlers plus an optional catch-all.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CatchHandler {
+    /// Byte offset of this handler within the handler list, matching
+    /// `TryItem::handler_off`.
+    pub offset: u16,
+    /// `(type_idx, handler_addr)` pairs in declaration order.
+    pub typed: Vec<(u32, u32)>,
+    /// Present when the encoded size was non-positive.
+    pub catch_all_addr: Option<u32>,
+}
+
+impl CatchHandler {
+    /// Every handler entry address, typed handlers first then the catch-all.
+    pub fn addresses(&self) -> Vec<u32> {
+        let mut out: Vec<u32> = self.typed.iter().map(|&(_, addr)| addr).collect();
+        if let Some(addr) = self.catch_all_addr {
+            out.push(addr);
+        }
+        out
+    }
+}
+
+/// The exception tables that follow a method's instruction stream.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ExceptionData {
+    pub tries: Vec<TryItem>,
+    pub handlers: Vec<CatchHandler>,
+}
+
+impl ExceptionData {
+    pub fn is_empty(&self) -> bool {
+        self.tries.is_empty()
+    }
+
+    /// Resolve a `try_item`'s `handler_off` to its handler entry.
+    pub fn handler_for(&self, item: &TryItem) -> Option<&CatchHandler> {
+        self.handlers.iter().find(|h| h.offset == item.handler_off)
+    }
+}
+
+/// Bounded allocation for attacker-controlled table sizes.
+pub const MAX_TRIES: usize = 65_535;
+pub const MAX_HANDLERS: usize = 65_535;
+pub const MAX_TYPED_PER_HANDLER: usize = 65_535;
+
+/// Parse the `try_item` array and `encoded_catch_handler_list` that follow a
+/// method's instructions.
+///
+/// Layout, per the DEX spec: the instruction stream ends at
+/// `code_off + 16 + insns_size * 2`. When `insns_size` is odd a two-byte
+/// padding unit follows so the `try_item` array starts 4-byte aligned. The
+/// handler list begins immediately after the `try_item` array, and each
+/// `try_item.handler_off` is a *byte offset from the start of that list*, not
+/// an index into it.
+pub fn parse_exception_data(
+    r: &DexReader,
+    code_off: u32,
+    item: &CodeItem,
+) -> Result<ExceptionData> {
+    if item.tries_size == 0 {
+        return Ok(ExceptionData::default());
+    }
+    let tries_size = (item.tries_size as usize).min(MAX_TRIES);
+    let base = code_off as usize;
+    let insns_size = item.insns.len();
+    let mut tries_base = base + 16 + insns_size * 2;
+    if insns_size % 2 == 1 {
+        tries_base += 2; // padding code unit to reach 4-byte alignment
+    }
+
+    let mut tries = Vec::with_capacity(tries_size);
+    for index in 0..tries_size {
+        let entry = tries_base + index * 8;
+        tries.push(TryItem {
+            start_addr: r.u32_at(entry)?,
+            insn_count: r.u16_at(entry + 4)?,
+            handler_off: r.u16_at(entry + 6)?,
+        });
+    }
+
+    let handlers_base = tries_base + tries_size * 8;
+    let (list_size, header_len) = r.uleb128_at(handlers_base)?;
+    let mut pos = handlers_base + header_len;
+    let count = (list_size as usize).min(MAX_HANDLERS);
+    let mut handlers = Vec::with_capacity(count);
+    for _ in 0..count {
+        let offset = (pos - handlers_base) as u16;
+        let (size, consumed) = r.sleb128_at(pos)?;
+        pos += consumed;
+        let typed_count = (size.unsigned_abs() as usize).min(MAX_TYPED_PER_HANDLER);
+        let mut typed = Vec::with_capacity(typed_count);
+        for _ in 0..typed_count {
+            let (type_idx, a) = r.uleb128_at(pos)?;
+            pos += a;
+            let (addr, b) = r.uleb128_at(pos)?;
+            pos += b;
+            typed.push((type_idx, addr));
+        }
+        // A non-positive size means a catch-all handler follows the typed list.
+        let catch_all_addr = if size <= 0 {
+            let (addr, consumed) = r.uleb128_at(pos)?;
+            pos += consumed;
+            Some(addr)
+        } else {
+            None
+        };
+        handlers.push(CatchHandler { offset, typed, catch_all_addr });
+    }
+
+    Ok(ExceptionData { tries, handlers })
+}
+
 #[derive(Debug, Clone)]
 pub struct Instruction {
     pub code_unit_offset: u32,
@@ -330,4 +466,174 @@ pub fn decode_instructions(insns: &[u16]) -> Result<Vec<CodeUnit>> {
     }
 
     Ok(out)
+}
+
+#[cfg(test)]
+mod exception_tests {
+    use super::*;
+
+    fn uleb(value: u32, out: &mut Vec<u8>) {
+        let mut v = value;
+        loop {
+            let mut byte = (v & 0x7f) as u8;
+            v >>= 7;
+            if v != 0 {
+                byte |= 0x80;
+            }
+            out.push(byte);
+            if v == 0 {
+                break;
+            }
+        }
+    }
+
+    /// Build a code_item with `insns_size` nops followed by an exception table.
+    ///
+    /// `tries` entries are `(start_addr, insn_count, handler_index)`; the
+    /// handler index is resolved to the handler's real byte offset within the
+    /// list, which is what a real `try_item.handler_off` stores. Note that the
+    /// list begins with its ULEB128 size, so the first handler is NOT at
+    /// offset 0.
+    fn build_code_item(
+        insns_size: usize,
+        tries: &[(u32, u16, usize)],
+        handlers: &[(Vec<(u32, u32)>, Option<u32>)],
+    ) -> (Vec<u8>, Vec<u16>) {
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&2u16.to_le_bytes()); // registers_size
+        buf.extend_from_slice(&0u16.to_le_bytes()); // ins_size
+        buf.extend_from_slice(&0u16.to_le_bytes()); // outs_size
+        buf.extend_from_slice(&(tries.len() as u16).to_le_bytes());
+        buf.extend_from_slice(&0u32.to_le_bytes()); // debug_info_off
+        buf.extend_from_slice(&(insns_size as u32).to_le_bytes());
+        for _ in 0..insns_size {
+            buf.extend_from_slice(&0u16.to_le_bytes()); // nop
+        }
+        if insns_size % 2 == 1 {
+            buf.extend_from_slice(&0u16.to_le_bytes()); // alignment padding
+        }
+        // Lay out the handler list first so each handler's real byte offset is
+        // known before the try_item array references it.
+        let mut list = Vec::new();
+        uleb(handlers.len() as u32, &mut list);
+        let mut handler_offsets: Vec<u16> = Vec::new();
+        for (typed, catch_all) in handlers {
+            handler_offsets.push(list.len() as u16);
+            // sleb128 for small magnitudes: positive => typed only,
+            // negative => typed plus catch-all.
+            let size: i32 = if catch_all.is_some() {
+                -(typed.len() as i32)
+            } else {
+                typed.len() as i32
+            };
+            list.push((size & 0x7f) as u8);
+            for &(type_idx, addr) in typed {
+                uleb(type_idx, &mut list);
+                uleb(addr, &mut list);
+            }
+            if let Some(addr) = catch_all {
+                uleb(*addr, &mut list);
+            }
+        }
+        for &(start, count, handler_index) in tries {
+            buf.extend_from_slice(&start.to_le_bytes());
+            buf.extend_from_slice(&count.to_le_bytes());
+            buf.extend_from_slice(&handler_offsets[handler_index].to_le_bytes());
+        }
+        buf.extend_from_slice(&list);
+        (buf, handler_offsets)
+    }
+
+    #[test]
+    fn parses_typed_handlers_and_catch_all() {
+        let (data, _) = build_code_item(
+            4,
+            &[(0, 3, 0)],
+            &[(vec![(7, 10), (8, 12)], Some(14))],
+        );
+        let reader = DexReader::new(&data);
+        let item = parse_code_item(&reader, 0).expect("code item");
+        assert_eq!(item.tries_size, 1);
+        let exceptions = parse_exception_data(&reader, 0, &item).expect("exception data");
+        assert_eq!(exceptions.tries.len(), 1);
+        assert_eq!(exceptions.tries[0].start_addr, 0);
+        assert_eq!(exceptions.tries[0].end_addr(), 3);
+        assert!(exceptions.tries[0].covers(2));
+        assert!(!exceptions.tries[0].covers(3));
+
+        let handler = exceptions.handler_for(&exceptions.tries[0]).expect("handler");
+        assert_eq!(handler.typed, vec![(7, 10), (8, 12)]);
+        assert_eq!(handler.catch_all_addr, Some(14));
+        assert_eq!(handler.addresses(), vec![10, 12, 14]);
+    }
+
+    #[test]
+    fn positive_size_means_no_catch_all() {
+        let (data, _) = build_code_item(2, &[(0, 2, 0)], &[(vec![(1, 5)], None)]);
+        let reader = DexReader::new(&data);
+        let item = parse_code_item(&reader, 0).unwrap();
+        let exceptions = parse_exception_data(&reader, 0, &item).unwrap();
+        let handler = exceptions.handler_for(&exceptions.tries[0]).unwrap();
+        assert_eq!(handler.typed, vec![(1, 5)]);
+        assert_eq!(handler.catch_all_addr, None);
+    }
+
+    /// An odd insns_size inserts a padding code unit before the try table.
+    /// Getting this wrong shifts every try_item by two bytes.
+    #[test]
+    fn odd_insns_size_padding_is_honored() {
+        let (data, _) = build_code_item(3, &[(1, 2, 0)], &[(vec![(4, 9)], None)]);
+        let reader = DexReader::new(&data);
+        let item = parse_code_item(&reader, 0).unwrap();
+        let exceptions = parse_exception_data(&reader, 0, &item).unwrap();
+        assert_eq!(exceptions.tries[0].start_addr, 1);
+        assert_eq!(exceptions.tries[0].insn_count, 2);
+        assert_eq!(
+            exceptions.handler_for(&exceptions.tries[0]).unwrap().typed,
+            vec![(4, 9)]
+        );
+    }
+
+    /// handler_off is a byte offset into the list, not an index.
+    #[test]
+    fn handler_off_is_a_byte_offset() {
+        let (data, offsets) = build_code_item(
+            2,
+            &[(0, 1, 0), (1, 1, 1)],
+            &[(vec![(1, 6)], None), (vec![(2, 7)], None)],
+        );
+        let reader = DexReader::new(&data);
+        let item = parse_code_item(&reader, 0).unwrap();
+        let exceptions = parse_exception_data(&reader, 0, &item).unwrap();
+        assert_eq!(exceptions.handlers.len(), 2);
+        // The list starts with its ULEB128 size, so the first handler is at
+        // byte offset 1 and the second follows it — offsets, not indices.
+        assert_eq!(exceptions.handlers[0].offset, offsets[0]);
+        assert_eq!(exceptions.handlers[1].offset, offsets[1]);
+        assert_eq!(offsets[0], 1);
+        assert!(offsets[1] > offsets[0]);
+        assert_eq!(
+            exceptions.handler_for(&exceptions.tries[1]).unwrap().typed,
+            vec![(2, 7)]
+        );
+    }
+
+    #[test]
+    fn no_tries_returns_empty_without_reading_further() {
+        let (data, _) = build_code_item(2, &[], &[]);
+        let reader = DexReader::new(&data);
+        let item = parse_code_item(&reader, 0).unwrap();
+        let exceptions = parse_exception_data(&reader, 0, &item).unwrap();
+        assert!(exceptions.is_empty());
+    }
+
+    #[test]
+    fn sleb128_sign_extension() {
+        let reader = DexReader::new(&[0x7f]); // -1
+        assert_eq!(reader.sleb128_at(0).unwrap(), (-1, 1));
+        let reader = DexReader::new(&[0x3f]); // 63
+        assert_eq!(reader.sleb128_at(0).unwrap(), (63, 1));
+        let reader = DexReader::new(&[0x40]); // -64
+        assert_eq!(reader.sleb128_at(0).unwrap(), (-64, 1));
+    }
 }

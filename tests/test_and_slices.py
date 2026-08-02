@@ -447,6 +447,119 @@ def test_and04_elf_symbol_struct_shapes():
         assert parsed["class"] == (64 if ei_class == 2 else 32)
 
 
+# ---------------------------------------------------------------- AND-03
+
+
+def _ensure_exception_fixture() -> tuple[Path, Path]:
+    dex = Path("tests/fixtures/exception_test.dex")
+    apk = Path("tests/fixtures/exception_test.apk")
+    if not (dex.is_file() and apk.is_file()):
+        subprocess.run([sys.executable, "scripts/generate_exception_dex.py"], check=True)
+    return dex, apk
+
+
+def test_and03_handlers_parsed_from_real_dex():
+    """Step 1: 3+ handlers, each reachable, with correct type descriptors."""
+    from apex.dex.exceptions import bridge_available, exception_summary_for_dex
+
+    if not bridge_available():
+        pytest.skip("native DEX bridge not built")
+    dex, _ = _ensure_exception_fixture()
+    summary = exception_summary_for_dex(dex.read_bytes())
+    assert summary["available"] is True
+    assert summary["valid"] is True
+    assert summary["methods_with_handlers"] == 1
+
+    method = summary["methods"][0]
+    assert method["class"] == "com.apex.Guarded"
+    assert method["method"] == "risky"
+    assert method["try_count"] == 1
+    assert method["handler_count"] == 3
+    # Every declared handler became a real block with an exception edge.
+    assert method["handler_blocks"] == 3
+    assert method["exception_edges"] == 3
+    assert method["unreachable_handlers"] == 0
+
+    ranges = method["protected_ranges"]
+    assert len(ranges) == 1
+    assert (ranges[0]["start"], ranges[0]["end"]) == (0, 3)
+    handlers = ranges[0]["handlers"]
+    assert [h["type"] for h in handlers] == [
+        "java.lang.Exception",
+        "java.lang.IllegalStateException",
+        "<any>",
+    ]
+    assert [h["addr"] for h in handlers] == [3, 4, 5]
+    assert [h["catch_all"] for h in handlers] == [False, False, True]
+
+
+def test_and03_methods_without_tries_are_untouched():
+    """Step 4: a method with tries_size == 0 reports no exception structure."""
+    from apex.dex.exceptions import bridge_available, exception_summary_for_dex
+
+    if not bridge_available():
+        pytest.skip("native DEX bridge not built")
+    summary = exception_summary_for_dex(REAL_DEX.read_bytes())
+    assert summary["valid"] is True
+    assert summary["method_count"] == 10
+    assert summary["methods_with_handlers"] == 0
+    assert summary["try_count"] == 0
+    assert summary["exception_edges"] == 0
+    assert summary["methods"] == []
+
+
+def test_and03_invalid_dex_reports_error_not_empty_success():
+    """A malformed DEX is an explicit error, never a silent empty result."""
+    from apex.dex.exceptions import bridge_available, exception_summary_for_dex
+
+    if not bridge_available():
+        pytest.skip("native DEX bridge not built")
+    summary = exception_summary_for_dex(b"definitely not a dex file")
+    assert summary["valid"] is False
+    assert summary["error"]
+
+
+def test_and03_wired_through_scan_and_cli(tmp_path: Path):
+    """Interface parity: the analyze report and the CLI both expose handlers."""
+    from apex.dex.exceptions import bridge_available, scan_exceptions
+    from apex.workflows import analyze_apk, exceptions_report
+
+    if not bridge_available():
+        pytest.skip("native DEX bridge not built")
+    _, apk = _ensure_exception_fixture()
+
+    extract_dir, _ = extract_apk(apk, tmp_path / "work")
+    scanned = scan_exceptions(extract_dir)
+    assert scanned["available"] is True
+    assert scanned["try_count"] == 1
+    assert scanned["handler_count"] == 3
+    assert scanned["methods"][0]["dex"] == "classes.dex"
+
+    report = analyze_apk(apk, tmp_path / "out")
+    assert report["dex"]["exceptions"]["try_count"] == 1
+
+    direct = exceptions_report(apk, tmp_path / "exc")
+    assert direct["handler_count"] == 3
+    dex_direct = exceptions_report(Path("tests/fixtures/exception_test.dex"))
+    assert dex_direct["methods_with_handlers"] == 1
+
+
+def test_and03_reports_unavailable_honestly(monkeypatch, tmp_path: Path):
+    """With no native bridge, APEX says so instead of reporting zero handlers."""
+    import apex.dex.exceptions as exceptions_module
+
+    monkeypatch.setattr(exceptions_module, "_bridge", None)
+    summary = exceptions_module.exception_summary_for_dex(b"anything")
+    assert summary["available"] is False
+    assert "not installed" in summary["reason"]
+    assert summary["hint"]
+
+    (tmp_path / "classes.dex").write_bytes(b"stub")
+    scanned = exceptions_module.scan_exceptions(tmp_path)
+    assert scanned["available"] is False
+    assert scanned["dex_files"] == ["classes.dex"]
+
+
 def test_and04_fat_macho_not_confused_with_elf(tmp_path: Path):
     """Format guard: a fat Mach-O is not mistaken for an Android library."""
     fat = tmp_path / "fat.bin"

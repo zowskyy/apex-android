@@ -210,7 +210,7 @@ Each slice is complete only when every verification step passes.
      per-DEX ceiling error and no dropped edges.
   4. Cross-DEX edge count is reported and is greater than zero on the fixture.
 - **Commit:** `git commit -m "Slice AND-01: unified multidex symbol and xref space"`
-- **Status:** NOT_STARTED
+- **Status:** DONE — `apex/dex/unified.py`; edges carry `resolved`/`caller_dex`/`callee_dex`/`cross_dex`
 
 ---
 
@@ -238,7 +238,7 @@ Each slice is complete only when every verification step passes.
      the detected type — never a partial report.
   4. Detection reads a bounded prefix and does not extract the archive.
 - **Commit:** `git commit -m "Slice AND-02: deterministic content-based format detection"`
-- **Status:** NOT_STARTED
+- **Status:** DONE — `apex/format_detect.py`; `apex detect` command; all entry points routed
 
 ---
 
@@ -270,7 +270,7 @@ Each slice is complete only when every verification step passes.
      `insns_size` for every method.
   4. Methods with `tries_size == 0` are byte-for-byte unchanged from today.
 - **Commit:** `git commit -m "Slice AND-03: exception handler blocks in CFG"`
-- **Status:** NOT_STARTED
+- **Status:** DONE — `code.rs` exception tables, `cfg.rs` exception edges, `core/dex_bridge` PyO3 bridge, `apex exceptions` command
 
 ---
 
@@ -303,7 +303,7 @@ Each slice is complete only when every verification step passes.
   5. Libraries for non-selected ABIs are excluded from the graph, and stripped
      binaries degrade to an explicit `no-symbols` state.
 - **Commit:** `git commit -m "Slice AND-04: unified Dalvik/native JNI xref graph"`
-- **Status:** NOT_STARTED
+- **Status:** DONE — `apex/native/elf.py` + `apex/jni/`; `apex jni` command
 
 ---
 

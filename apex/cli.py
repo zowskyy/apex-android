@@ -30,6 +30,7 @@ from apex.workflows import (
     decompile_apk,
     diff_apks,
     doctor,
+    exceptions_report,
     export_bundle,
     export_icon,
     framework_check,
@@ -143,6 +144,12 @@ def build_parser() -> argparse.ArgumentParser:
     signing_cmd = sub.add_parser("signing", help="certificate and signature detail")
     signing_cmd.add_argument("apk")
     signing_cmd.add_argument("--output", "-o")
+
+    exceptions_cmd = sub.add_parser(
+        "exceptions", help="report try/catch structure per method (APK or .dex)"
+    )
+    exceptions_cmd.add_argument("apk")
+    exceptions_cmd.add_argument("--output", "-o")
 
     jni_cmd = sub.add_parser(
         "jni", help="resolve the Dalvik/native JNI cross-reference graph"
@@ -310,6 +317,8 @@ def main(argv: list[str] | None = None) -> int:
             native = analyze_signatures(Path(args.apk))
             native["cross_check"] = cross_check_with_apksigner(Path(args.apk), native)
             _print(format_signing_panel(native), args.output)
+        elif args.command == "exceptions":
+            _print(exceptions_report(Path(args.apk)), args.output)
         elif args.command == "jni":
             _print(jni_report(Path(args.apk)), args.output)
         elif args.command == "detect":
