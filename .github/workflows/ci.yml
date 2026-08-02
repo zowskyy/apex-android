@@ -17,13 +17,16 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: Install dependencies
         run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install --upgrade pip wheel
           pip install -e ".[dev,mcp]"
           pip install maturin
           maturin develop --release -m core/zip_reader/Cargo.toml
           maturin develop --release -m core/dex_reader/Cargo.toml
       - name: Ruff
-        run: ruff check apex tests
+        run: .venv/bin/ruff check apex tests
       - name: Pytest
-        run: pytest -q
+        run: .venv/bin/pytest -q
       - name: Cargo tests
         run: cargo test --workspace
