@@ -13,6 +13,10 @@ BUILD="$HERE/build"
 OUT_APK="$HERE/dist/apex-client.apk"
 INJECT="$ROOT/tools/mobile_test_app/inject_dex.py"
 
+# Export so aapt2/d8/apksigner resolve consistently (no Gradle/NDK in this script).
+export ANDROID_HOME="$SDK"
+export ANDROID_SDK_ROOT="$SDK"
+
 pick_tool() {
   local name="$1"
   if command -v "$name" >/dev/null 2>&1; then
@@ -30,14 +34,30 @@ pick_tool() {
 }
 
 if [[ ! -d "$SDK" ]]; then
-  echo "Android SDK not found. Set ANDROID_HOME or install Android SDK." >&2
+  echo "Android SDK not found at: $SDK" >&2
+  echo "Set ANDROID_HOME or ANDROID_SDK_ROOT to your SDK root." >&2
+  echo "Example: export ANDROID_HOME=\"\$HOME/Android/Sdk\"" >&2
   exit 1
 fi
 
 BUILD_TOOLS="$SDK/build-tools/$BUILD_TOOLS_VERSION"
 PLATFORM_JAR="$SDK/platforms/$PLATFORM/android.jar"
+if [[ ! -f "$PLATFORM_JAR" && -f "$SDK/platforms/android-36.1/android.jar" ]]; then
+  PLATFORM="android-36.1"
+  PLATFORM_JAR="$SDK/platforms/$PLATFORM/android.jar"
+  echo "Using fallback platform: $PLATFORM"
+fi
+
 if [[ ! -f "$PLATFORM_JAR" ]]; then
-  PLATFORM_JAR="$SDK/platforms/android-36.1/android.jar"
+  echo "Platform jar missing. Install platform ${APEX_ANDROID_PLATFORM:-android-34} via sdkmanager." >&2
+  echo "SDK root: $SDK" >&2
+  exit 1
+fi
+
+if [[ ! -d "$BUILD_TOOLS" ]]; then
+  echo "Build-tools $BUILD_TOOLS_VERSION not found under $SDK/build-tools" >&2
+  echo "Install with: sdkmanager \"build-tools;$BUILD_TOOLS_VERSION\"" >&2
+  exit 1
 fi
 
 AAPT2="$(pick_tool aapt2)"

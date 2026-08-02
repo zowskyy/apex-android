@@ -7,7 +7,7 @@
 #   ./build.sh --android       # also build Android client APK (needs SDK)
 #   ./build.sh --macos-apps    # also build macOS .app bundles (macOS only)
 #   ./build.sh --docker        # also build Docker image
-#   ./build.sh --skip-tests    # skip pytest / cargo test
+#   ./build.sh --skip-tests    # skip cargo test, ruff, and pytest
 #   ./build.sh --help
 #
 set -euo pipefail
@@ -44,6 +44,22 @@ done
 
 step() { echo ""; echo "==> $*"; }
 
+ensure_android_sdk() {
+  local sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}}"
+  if [[ ! -d "$sdk" ]]; then
+    echo "Android SDK not found at: $sdk" >&2
+    echo "Export ANDROID_HOME or ANDROID_SDK_ROOT before --android." >&2
+    echo "Example: export ANDROID_HOME=\"\$HOME/Android/Sdk\"" >&2
+    exit 1
+  fi
+  export ANDROID_HOME="$sdk"
+  export ANDROID_SDK_ROOT="$sdk"
+  echo "ANDROID_HOME=$ANDROID_HOME"
+  if [[ -n "${ANDROID_NDK_HOME:-}" ]]; then
+    echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME (not required for apex-client WebView APK)"
+  fi
+}
+
 step "Python virtual environment"
 if [[ ! -x "$PY" ]]; then
   python3 -m venv "$VENV"
@@ -62,22 +78,24 @@ if [[ ! -x "$MATURIN" ]]; then
 fi
 
 step "Native extensions (apex_zip_reader, apex_dex_reader)"
-Maturin_ARGS=()
+MATURIN_ARGS=()
 if [[ "$RUST_PROFILE" == "release" ]]; then
-  Maturin_ARGS+=(--release)
+  MATURIN_ARGS+=(--release)
 fi
-"$MATURIN" develop "${Maturin_ARGS[@]}" -m core/zip_reader/Cargo.toml
-"$MATURIN" develop "${Maturin_ARGS[@]}" -m core/dex_reader/Cargo.toml
-
-step "Rust workspace tests"
-cargo test --workspace
+"$MATURIN" develop "${MATURIN_ARGS[@]}" -m core/zip_reader/Cargo.toml
+"$MATURIN" develop "${MATURIN_ARGS[@]}" -m core/dex_reader/Cargo.toml
 
 if [[ "$SKIP_TESTS" -eq 0 ]]; then
+  step "Rust workspace tests"
+  cargo test --workspace
+
   step "Python lint (ruff)"
   "$VENV/bin/ruff" check apex tests
 
   step "Python tests (pytest)"
   "$PY" -m pytest -q
+else
+  echo "Skipping cargo test, ruff, and pytest (--skip-tests)"
 fi
 
 if [[ "$DO_MACOS_APPS" -eq 1 ]]; then
@@ -90,9 +108,16 @@ if [[ "$DO_MACOS_APPS" -eq 1 ]]; then
   fi
 fi
 
+ANDROID_APK="$ROOT/wrappers/android/dist/apex-client.apk"
 if [[ "$DO_ANDROID" -eq 1 ]]; then
   step "Android client APK"
+  ensure_android_sdk
   bash wrappers/android/build.sh
+  if [[ ! -f "$ANDROID_APK" ]]; then
+    echo "Android build finished but APK missing: $ANDROID_APK" >&2
+    exit 1
+  fi
+  ls -la "$ANDROID_APK"
 fi
 
 if [[ "$DO_DOCKER" -eq 1 ]]; then
@@ -111,8 +136,9 @@ echo "  $VENV/bin/apex doctor"
 echo "  $VENV/bin/apex gui"
 echo "  $VENV/bin/apex mobile          # phone browser on LAN"
 echo "  wrappers/README.md             # platform app wrappers"
-if [[ -f wrappers/android/dist/apex-client.apk ]]; then
-  echo "  wrappers/android/dist/apex-client.apk"
+if [[ -f "$ANDROID_APK" ]]; then
+  echo "  $ANDROID_APK"
+  echo "  adb install -r $ANDROID_APK  # confirm timestamp above before installing"
 fi
 if [[ -d wrappers/macos/dist ]]; then
   echo "  wrappers/macos/dist/APEX.app"
