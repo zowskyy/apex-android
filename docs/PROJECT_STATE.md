@@ -121,7 +121,8 @@ confirmed against live stack + APKLab/RevEng/MASTG/apktool 3.0/Play policy):
 3. Doctor expansion (report missing engines + install hints)
 4. First connected-device local corpus slices
 
-See `docs/COMPETITIVE_STRATEGY.md`.
+Execution details are now fixed in `docs/IMPLEMENTATION_GUIDE.md`; use the
+unique `F`/`T`/`D`/`I`/`U` slice identifiers in `docs/ROADMAP.md`.
 
 Housekeeping noted by second-pass audit: `networkx` is declared but unused;
 drop or defer until call-graph work lands. Blueprint “replace jadx/apktool”

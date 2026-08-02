@@ -103,7 +103,11 @@ peers such as APKLab) is a local analysis workstation that:
 - keeps Androguard as the metadata/DEX backbone and fallback
 - uses ADB for user-owned device sync rather than casual full inventory scanning
 
-See `docs/COMPETITIVE_STRATEGY.md` for the roadmap and benchmark targets.
+Execution documents:
+
+- `docs/COMPETITIVE_STRATEGY.md` — product position and benchmark targets
+- `docs/IMPLEMENTATION_GUIDE.md` — architecture, contracts and test gates
+- `docs/ROADMAP.md` — dependency-ordered slices and release gates
 
 ## Development
 

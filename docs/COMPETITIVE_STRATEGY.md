@@ -323,6 +323,10 @@ flowchart TB
 
 Housekeeping that should ride with slice 1.1: remove unused `networkx` until a call-graph feature imports it; align blueprint language with this document so “replace jadx/apktool” is not misread as the near-term plan.
 
+Implementation contracts and acceptance criteria are defined in
+[`IMPLEMENTATION_GUIDE.md`](IMPLEMENTATION_GUIDE.md). The authoritative slice
+order and release gates are in [`ROADMAP.md`](ROADMAP.md).
+
 ---
 
 ## Final strategic judgment

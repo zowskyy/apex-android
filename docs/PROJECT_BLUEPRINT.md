@@ -11,6 +11,10 @@
 > apktool 3.x / apksigner / bundletool / apkanalyzer with provenance; native
 > parsers remain for proven hot paths (ZIP security today, more later).
 > “Replace jadx/apktool entirely” is long-horizon research, not the beat plan.
+>
+> **Execution:** `docs/IMPLEMENTATION_GUIDE.md` is the current architecture
+> contract and `docs/ROADMAP.md` is the authoritative slice order. Historical
+> slice descriptions below remain useful for native research context.
 
 ## Vision
 
