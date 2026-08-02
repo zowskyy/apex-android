@@ -8,9 +8,13 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .analysis import ApexError, diff_indexes, inspect_apk
-from .web import serve
-from .workflows import (
+from apex.analysis import ApexError, diff_indexes, inspect_apk
+from apex.corpus.stats import corpus_stats
+from apex.device.sync import list_connected, sync_device
+from apex.providers.bundletool import build_apks, extract_apks, inspect_bundle
+from apex.version import __version__
+from apex.web import serve
+from apex.workflows import (
     PostgresStore,
     SQLiteStore,
     analyze_apk,
@@ -19,13 +23,13 @@ from .workflows import (
     decompile_apk,
     diff_apks,
     doctor,
+    export_bundle,
+    export_icon,
     framework_check,
     roundtrip_verify,
     security_scan,
     verify_apk,
 )
-
-VERSION = "0.2.0"
 
 
 def _print(data: Any, output: str | None = None) -> None:
@@ -42,7 +46,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="apex",
         description="APEX — secure Android package inspection, decompilation, and rebuilding",
     )
-    parser.add_argument("--version", action="version", version=f"APEX {VERSION}")
+    parser.add_argument("--version", action="version", version=f"APEX {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
     inspect_cmd = sub.add_parser("inspect", help="fast APK metadata inspection")
@@ -62,6 +66,11 @@ def build_parser() -> argparse.ArgumentParser:
     decompile_cmd.add_argument("--out", default="apex_decompiled")
     decompile_cmd.add_argument("--mapping", help="ProGuard/R8 mapping.txt")
     decompile_cmd.add_argument("--no-smali", action="store_true")
+    decompile_cmd.add_argument(
+        "--provider",
+        choices=["auto", "jadx", "androguard"],
+        default="auto",
+    )
 
     decode_cmd = sub.add_parser("decode", help="decode APK to an editable project")
     decode_cmd.add_argument("apk")
@@ -103,6 +112,41 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("doctor", help="show parser and external tool availability")
 
+    icon_cmd = sub.add_parser("icon", help="export launcher icon from an APK")
+    icon_cmd.add_argument("apk")
+    icon_cmd.add_argument("-o", "--output", default="icon.png")
+
+    export_cmd = sub.add_parser("export", help="export APK, report, and manifest bundle")
+    export_cmd.add_argument("apk")
+    export_cmd.add_argument("--out", default="apex_export")
+
+    device = sub.add_parser("device", help="connected-device workflows")
+    device_sub = device.add_subparsers(dest="device_command", required=True)
+    device_sub.add_parser("list", help="list connected devices")
+    pull = device_sub.add_parser("pull", help="pull a package APK set from a device")
+    pull.add_argument("package")
+    pull.add_argument("--serial", required=True)
+    pull.add_argument("--user", type=int, default=0)
+    pull.add_argument("--out", default="apex_device_pull")
+    sync = device_sub.add_parser("sync", help="incremental device corpus sync")
+    sync.add_argument("--serial", required=True)
+    sync.add_argument("--user", type=int, default=0)
+    sync.add_argument("--db", default=str(Path.home() / ".apex" / "corpus.db"))
+    stats = device_sub.add_parser("stats", help="corpus statistics")
+    stats.add_argument("--db", default=str(Path.home() / ".apex" / "corpus.db"))
+    stats.add_argument("--serial")
+
+    bundle = sub.add_parser("bundle", help="Android App Bundle workflows")
+    bundle_sub = bundle.add_subparsers(dest="bundle_command", required=True)
+    bundle_inspect = bundle_sub.add_parser("inspect", help="dump bundle manifest via bundletool")
+    bundle_inspect.add_argument("aab")
+    bundle_build = bundle_sub.add_parser("build-apks", help="build APKS from an AAB")
+    bundle_build.add_argument("aab")
+    bundle_build.add_argument("--out", default="output.apks")
+    bundle_extract = bundle_sub.add_parser("extract", help="extract APKs from an APKS archive")
+    bundle_extract.add_argument("apks")
+    bundle_extract.add_argument("--out", default="apex_apks")
+
     gui_cmd = sub.add_parser("gui", aliases=["serve"], help="start the local web interface")
     gui_cmd.add_argument("--host", default="127.0.0.1")
     gui_cmd.add_argument("--port", type=int, default=8765)
@@ -136,9 +180,10 @@ def main(argv: list[str] | None = None) -> int:
                 Path(args.out),
                 Path(args.mapping) if args.mapping else None,
                 not args.no_smali,
+                provider=args.provider,
             )
             print(f"Decompiled {len(result['classes'])} classes to {args.out}")
-            if result["errors"]:
+            if result.get("errors"):
                 print(f"Warnings: {len(result['errors'])}", file=sys.stderr)
         elif args.command == "decode":
             result = decode_apk(Path(args.apk), Path(args.out), args.backend)
@@ -178,6 +223,40 @@ def main(argv: list[str] | None = None) -> int:
             _print(framework_check(Path(args.apk)))
         elif args.command == "doctor":
             _print(doctor())
+        elif args.command == "icon":
+            _print(export_icon(Path(args.apk), Path(args.output)))
+        elif args.command == "export":
+            _print(export_bundle(Path(args.apk), Path(args.out)))
+        elif args.command == "device":
+            if args.device_command == "list":
+                _print(list_connected())
+            elif args.device_command == "pull":
+                from apex.device.pull import pull_to_layout
+
+                result = pull_to_layout(
+                    args.serial,
+                    args.package,
+                    Path(args.out),
+                    user_id=args.user,
+                )
+                _print(
+                    {
+                        "package": result.package,
+                        "destination": result.destination,
+                        "artifact_count": result.artifact_count,
+                    }
+                )
+            elif args.device_command == "sync":
+                _print(sync_device(args.serial, Path(args.db), user_id=args.user))
+            elif args.device_command == "stats":
+                _print(corpus_stats(Path(args.db), serial=args.serial))
+        elif args.command == "bundle":
+            if args.bundle_command == "inspect":
+                _print(inspect_bundle(Path(args.aab)))
+            elif args.bundle_command == "build-apks":
+                _print(build_apks(Path(args.aab), Path(args.out)))
+            elif args.bundle_command == "extract":
+                _print(extract_apks(Path(args.apks), Path(args.out)))
         elif args.command in {"gui", "serve"}:
             serve(
                 args.host,

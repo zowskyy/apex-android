@@ -13,6 +13,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from apex.version import __version__
+from apex.corpus.stats import corpus_stats
+from apex.device.sync import list_connected
+
 from .analysis import ApexError, dex_metadata, inspect_apk, sanitized_zip_name
 from .workflows import decompile_apk, doctor, security_scan
 
@@ -74,7 +78,7 @@ fetch("/api/health").then(r=>r.json()).then(d=>$("health").textContent=d.ready?"
 
 
 class ApexWebHandler(BaseHTTPRequestHandler):
-    server_version = "APEX/0.2"
+    server_version = f"APEX/{__version__}"
 
     def _json(self, data: object, status: int = 200) -> None:
         body = json.dumps(data, default=str).encode()
@@ -132,6 +136,13 @@ class ApexWebHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
         elif path == "/api/health":
             self._json(doctor())
+        elif path == "/api/devices":
+            self._json({"devices": list_connected()})
+        elif path == "/api/corpus/stats":
+            query = parse_qs(urlparse(self.path).query)
+            db = query.get("db", [str(Path.home() / ".apex" / "corpus.db")])[0]
+            serial = query.get("serial", [None])[0]
+            self._json(corpus_stats(Path(db), serial=serial))
         else:
             self._json({"error": "not found"}, HTTPStatus.NOT_FOUND)
 

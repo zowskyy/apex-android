@@ -21,6 +21,22 @@ from typing import Any, Iterator
 
 from jinja2 import Template
 
+from apex.permissions.enrich import enrich_declared
+from apex.permissions.linkage import link_permissions_to_dex
+from apex.providers.apkanalyzer import benchmark_apk
+from apex.providers.apksigner import verify_signatures_androguard, verify_signatures_apksigner
+from apex.providers.apktool import (
+    build_with_apktool,
+    decode_with_apktool,
+    framework_diagnostics,
+)
+from apex.providers.jadx import decompile_apk_jadx, decompile_class_androguard_fallback
+from apex.providers.preflight import preflight_apk
+from apex.providers.registry import doctor_report, get_registry
+from apex.providers.types import ProvenanceCollector, ProvenanceRecord, attach_provenance
+from apex.signing.display import format_signing_panel
+from apex.version import __version__
+
 from .analysis import (
     ANDROID_NS,
     ApexError,
@@ -118,6 +134,7 @@ table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:9px;bord
 <tr><th>Main activity</th><td><code>{{ manifest.main_activity or "not declared" }}</code></td></tr></table></section>
 <section><h2>Security</h2><p class="{{ 'ok' if security.zip_extraction.warned == 0 else 'warn' }}">
 {{ security.zip_extraction.warned }} unsafe ZIP entries blocked; backend {{ security.zip_extraction.backend }}.</p></section>
+{% if provenance %}<section><h2>Produced by</h2>{% for item in provenance %}<span class="pill">{{ item.operation }} · {{ item.provider }} ({{ item.status }})</span>{% endfor %}</section>{% endif %}
 <section><h2>Entry points</h2>{% for item in reach.entry_points %}<span class="pill">{{ item }}</span>{% else %}<p>None detected.</p>{% endfor %}</section>
 <section><h2>DEX files</h2>{% for name in dex.dex_files %}<span class="pill">{{ name }}</span>{% endfor %}
 {% if dex.errors %}<details><summary>Parser warnings ({{ dex.errors|length }})</summary><pre>{{ dex.errors|tojson(indent=2) }}</pre></details>{% endif %}</section>
@@ -133,6 +150,7 @@ def render_report(report: dict[str, Any]) -> str:
         dex=report["dex"],
         reach=report["reachability"],
         security=report["security"],
+        provenance=report.get("provenance", []),
     )
 
 
@@ -144,21 +162,46 @@ def analyze_apk(
 ) -> dict[str, Any]:
     apk_path, out_dir = Path(apk_path), Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    collector = ProvenanceCollector()
     extract_dir, zip_security = extract_apk(apk_path, out_dir / "work")
+    collector.add(
+        ProvenanceRecord(
+            operation="archive.extract",
+            provider=str(zip_security.get("backend", "unknown")),
+            provider_version=None,
+            status="ok",
+        )
+    )
     resources = scan_resources(extract_dir)
+    collector.add(
+        ProvenanceRecord(
+            operation="manifest.decode",
+            provider="androguard",
+            provider_version=_androguard_version(),
+            status="ok",
+        )
+    )
     native = scan_native_libs(extract_dir, keep_abi)
     dex = scan_dex_metadata(extract_dir)
     crossrefs = build_crossrefs(dex)
     reachability = build_reachability(dex, resources, native)
     bundle = export_minimal_bundle(extract_dir, out_dir, keep_abi)
+    manifest = resources.get("manifest", {})
+    permissions_enriched = enrich_declared(manifest.get("permissions", []))
+    permission_links = link_permissions_to_dex(
+        manifest.get("permissions", []),
+        dex.get("methods", []),
+    )
+    benchmarks = {"apkanalyzer": benchmark_apk(apk_path)}
     report = {
-        "schema_version": 2,
+        "schema_version": 3,
         "meta": {
             "name": apk_path.name,
             "path": str(apk_path),
             "sha256": sha256_file(apk_path),
             "size_bytes": apk_path.stat().st_size,
             "analyzed_at": int(time.time()),
+            "apex_version": __version__,
         },
         "security": {
             "zip_extraction": {
@@ -171,21 +214,37 @@ def analyze_apk(
                     for item in zip_security.get("entries", [])
                     if item.get("verdict") == "WARN"
                 ],
-            }
+            },
+            "preflight": preflight_apk(apk_path),
         },
-        "resources": resources,
+        "resources": {
+            **resources,
+            "permissions_enriched": permissions_enriched,
+            "permission_links": permission_links,
+        },
         "native": native,
         "dex": dex,
         "crossrefs": crossrefs,
         "reachability": reachability,
         "bundle": bundle,
+        "benchmarks": benchmarks,
     }
+    report = attach_provenance(report, collector, schema_version=3)
     (out_dir / "report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     (out_dir / "report.html").write_text(render_report(report), encoding="utf-8")
     if store:
         for name in ("meta", "resources", "native", "dex", "crossrefs", "reachability"):
             store.put(name, report[name])
     return report
+
+
+def _androguard_version() -> str | None:
+    try:
+        import androguard
+
+        return getattr(androguard, "__version__", "installed")
+    except ImportError:
+        return None
 
 
 # Backward-compatible public function name.
@@ -233,55 +292,43 @@ def decompile_apk(
     out_dir: Path,
     mapping_path: Path | None = None,
     emit_smali: bool = True,
+    *,
+    provider: str = "auto",
 ) -> dict[str, Any]:
-    """Decompiler DEX files to Java, with readable Dalvik fallback files."""
+    """Decompile DEX to Java using jadx when available, Androguard as fallback."""
     apk_path, out_dir = Path(apk_path), Path(out_dir)
-    java_dir, smali_dir = out_dir / "java", out_dir / "smali"
-    java_dir.mkdir(parents=True, exist_ok=True)
-    if emit_smali:
-        smali_dir.mkdir(parents=True, exist_ok=True)
-    mapping = _mapping_index(mapping_path)
-    index: dict[str, Any] = {"apk": str(apk_path), "dex_files": [], "classes": [], "errors": []}
-
-    with zipfile.ZipFile(apk_path) as archive:
-        dex_names = sorted(
-            name for name in archive.namelist() if re.fullmatch(r"(?:.*/)?classes\d*\.dex", name)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    collector = ProvenanceCollector()
+    preflight = preflight_apk(apk_path)
+    selected = get_registry().resolve("decompile.java", requested=provider)
+    if selected == "jadx":
+        try:
+            index = decompile_apk_jadx(apk_path, out_dir / "java", collector=collector)
+            for item in index.get("classes", []):
+                if item.get("java") and not str(item["java"]).startswith("java/"):
+                    item["java"] = f"java/{item['java']}"
+            index["preflight"] = preflight
+            index = attach_provenance(index, collector, schema_version=3)
+            (out_dir / "decompile-index.json").write_text(json.dumps(index, indent=2), encoding="utf-8")
+            return index
+        except ApexError:
+            if provider == "jadx":
+                raise
+    if selected in {"androguard", None} or provider in {"auto", "androguard"}:
+        index = decompile_class_androguard_fallback(
+            apk_path, out_dir, collector=collector, emit_smali=emit_smali
         )
-        for dex_name in dex_names:
-            try:
-                dex, _ = load_dex(archive.read(dex_name), with_decompiler=True)
-            except Exception as exc:
-                index["errors"].append({"dex": dex_name, "error": str(exc)})
-                continue
-            index["dex_files"].append(dex_name)
-            for cls in dex.get_classes():
-                descriptor = str(cls.get_name())
-                obfuscated = descriptor_to_java(descriptor)
-                display_name = mapping.get(obfuscated, obfuscated)
-                class_entry: dict[str, Any] = {
-                    "dex": dex_name,
-                    "name": display_name,
-                    "obfuscated_name": obfuscated if display_name != obfuscated else "",
-                }
-                try:
-                    source = cls.get_source()
-                    destination = java_dir / _safe_source_path(display_name, ".java")
-                    destination.parent.mkdir(parents=True, exist_ok=True)
-                    destination.write_text(source, encoding="utf-8")
-                    class_entry["java"] = destination.relative_to(out_dir).as_posix()
-                except Exception as exc:
-                    class_entry["decompile_error"] = str(exc)
-                if emit_smali:
-                    destination = smali_dir / _safe_source_path(display_name, ".smali")
-                    destination.parent.mkdir(parents=True, exist_ok=True)
-                    header = f".class {cls.get_access_flags_string()} {descriptor}\n"
-                    header += f".super {cls.get_superclassname()}\n\n"
-                    body = "".join(_method_smali(method) + "\n" for method in cls.get_methods())
-                    destination.write_text(header + body, encoding="utf-8")
-                    class_entry["smali"] = destination.relative_to(out_dir).as_posix()
-                index["classes"].append(class_entry)
-    (out_dir / "decompile-index.json").write_text(json.dumps(index, indent=2), encoding="utf-8")
-    return index
+        if mapping_path:
+            mapping = _mapping_index(mapping_path)
+            for item in index["classes"]:
+                if item["name"] in mapping:
+                    item["obfuscated_name"] = item["name"]
+                    item["name"] = mapping[item["name"]]
+        index["preflight"] = preflight
+        index = attach_provenance(index, collector, schema_version=3)
+        (out_dir / "decompile-index.json").write_text(json.dumps(index, indent=2), encoding="utf-8")
+        return index
+    raise ApexError(f"no decompile provider available for request: {provider}")
 
 
 def _command_path(name: str, env_name: str | None = None) -> str | None:
@@ -318,14 +365,22 @@ def decode_apk(apk_path: Path, out_dir: Path, backend: str = "auto") -> dict[str
                 "apktool backend requested but not found; install apktool or set APEX_APKTOOL_JAR"
             )
         out_dir.parent.mkdir(parents=True, exist_ok=True)
-        result = _run([*tool, "d", "-f", str(apk_path), "-o", str(out_dir)])
-        if result.returncode:
-            raise ApexError(f"apktool decode failed:\n{(result.stdout + result.stderr)[-3000:]}")
+        decode_with_apktool(apk_path, out_dir)
         metadata = {
-            "schema_version": 1,
+            "schema_version": 3,
             "backend": "apktool",
             "source_apk": str(apk_path.resolve()),
             "source_sha256": sha256_file(apk_path),
+            "provenance": [
+                {
+                    "operation": "decode.resources",
+                    "provider": "apktool",
+                    "provider_version": __import__(
+                        "apex.providers.apktool", fromlist=["apktool_version"]
+                    ).apktool_version(),
+                    "status": "ok",
+                }
+            ],
         }
         (out_dir / "apex-project.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
         return metadata
@@ -441,9 +496,7 @@ def build_project(
         tool = _apktool_command()
         if not tool:
             raise ApexError("this project requires apktool; install it or set APEX_APKTOOL_JAR")
-        result = _run([*tool, "b", str(project_dir), "-o", str(output_apk)])
-        if result.returncode:
-            raise ApexError(f"apktool build failed:\n{(result.stdout + result.stderr)[-3000:]}")
+        build_with_apktool(project_dir, output_apk)
     elif backend == "raw":
         raw_dir = project_dir / metadata.get("raw_dir", "raw")
         if not raw_dir.is_dir():
@@ -508,28 +561,34 @@ def verify_apk(apk_path: Path) -> dict[str, Any]:
     except (OSError, zipfile.BadZipFile) as exc:
         return {"valid": False, "findings": [{"severity": "error", "message": str(exc)}]}
 
-    signatures: dict[str, Any] = {"signed": False, "v1": False, "v2": False, "v3": False}
+    signatures: dict[str, Any]
+    collector = ProvenanceCollector()
     try:
-        from androguard.core.apk import APK
-
-        parsed = APK(str(apk_path))
-        signatures = {
-            "signed": bool(parsed.is_signed()),
-            "v1": bool(parsed.is_signed_v1()),
-            "v2": bool(parsed.is_signed_v2()),
-            "v3": bool(parsed.is_signed_v3()),
-            "certificate_count": len(parsed.get_certificates()),
-        }
-    except Exception as exc:
-        signatures["error"] = str(exc)
-    return {
+        signatures = verify_signatures_apksigner(apk_path, collector=collector)
+    except ApexError:
+        signatures = verify_signatures_androguard(apk_path)
+        collector.add(
+            ProvenanceRecord(
+                operation="verify.signatures",
+                provider="androguard",
+                provider_version=_androguard_version(),
+                status="fallback",
+                fallback_from="apksigner",
+                reason="apksigner unavailable",
+            )
+        )
+    signing_panel = format_signing_panel(signatures)
+    payload = {
+        "schema_version": 3,
         "valid": not any(item["severity"] == "error" for item in findings),
         "apk": str(apk_path),
         "sha256": sha256_file(apk_path),
         "signatures": signatures,
+        "signing": signing_panel,
         "dex": dex_results,
         "findings": findings,
     }
+    return attach_provenance(payload, collector, schema_version=3)
 
 
 def _iter_arsc_strings(data: bytes) -> Iterator[tuple[int, str]]:
@@ -797,39 +856,44 @@ def roundtrip_verify(apk_path: Path, work_dir: Path) -> dict[str, Any]:
 def framework_check(apk_path: Path) -> dict[str, Any]:
     info = inspect_apk(apk_path)
     target = info.get("manifest", {}).get("target_sdk", "")
-    tool = _apktool_command()
-    return {
-        "apk": str(apk_path),
-        "target_sdk": target,
-        "apktool_available": tool is not None,
-        "verdict": "READY" if tool else "RAW_BACKEND_ONLY",
-        "message": (
-            "apktool is available for compiled-resource rebuilds"
-            if tool
-            else "APEX can analyze and losslessly repack raw files; install apktool "
-            "or set APEX_APKTOOL_JAR to rebuild edited XML/resources"
-        ),
-    }
+    return framework_diagnostics(apk_path, str(target))
 
 
 def doctor() -> dict[str, Any]:
-    tools = {
-        "java": _command_path("java"),
-        "apktool": (_apktool_command() or [None])[0],
-        "apksigner": _command_path("apksigner", "APEX_APKSIGNER"),
-        "adb": _command_path("adb", "APEX_ADB"),
-        "aapt2": _command_path("aapt2", "APEX_AAPT2"),
-    }
-    try:
-        import androguard
+    return doctor_report()
 
-        androguard_version = getattr(androguard, "__version__", "installed")
-    except ImportError:
-        androguard_version = None
+
+def export_icon(apk_path: Path, output: Path) -> dict[str, Any]:
+    apk_path, output = Path(apk_path), Path(output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    candidates = [
+        "res/mipmap-xxxhdpi-v4/ic_launcher.png",
+        "res/mipmap-xxhdpi-v4/ic_launcher.png",
+        "res/drawable/ic_launcher.png",
+    ]
+    with zipfile.ZipFile(apk_path) as archive:
+        names = archive.namelist()
+        selected = next((name for name in candidates if name in names), None)
+        if not selected:
+            pngs = [name for name in names if name.endswith(".png") and "/ic_" in name.lower()]
+            selected = pngs[0] if pngs else None
+        if not selected:
+            raise ApexError("no launcher icon resource found in APK")
+        output.write_bytes(archive.read(selected))
+    return {"apk": str(apk_path), "icon_source": selected, "output": str(output)}
+
+
+def export_bundle(apk_path: Path, out_dir: Path) -> dict[str, Any]:
+    apk_path, out_dir = Path(apk_path), Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    report_dir = out_dir / "report"
+    analyze_apk(apk_path, report_dir)
+    shutil.copy2(apk_path, out_dir / apk_path.name)
+    manifest = report_dir / "work" / "extracted" / "AndroidManifest.xml"
+    if manifest.is_file():
+        shutil.copy2(manifest, out_dir / "AndroidManifest.xml")
     return {
-        "apex": "0.2.0",
-        "androguard": androguard_version,
-        "native_zip": __import__("apex.analysis", fromlist=["_native_zip"])._native_zip is not None,
-        "tools": tools,
-        "ready": androguard_version is not None,
+        "out_dir": str(out_dir),
+        "apk": str(out_dir / apk_path.name),
+        "report": str(report_dir / "report.json"),
     }

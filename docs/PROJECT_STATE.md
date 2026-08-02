@@ -111,22 +111,24 @@ source.
   (no branches) produces a single block with no edges. Clippy clean. Whole
   workspace: 20 Rust tests passing.
 
+## Current Phase: v1.0 roadmap implementation complete
+
+APEX v1.0 delivers the audited competitive strategy through provider
+orchestration, device corpus workflows, enriched reports, and expanded CLI/web
+surfaces. Native parser research (`R*`) and the optional companion app (`C*`)
+remain post-v1.0 tracks documented in `docs/ROADMAP.md`.
+
+Implemented in v1.0:
+- Provider foundation (`F1–F4`): types, runner, registry, schema v3 provenance, doctor v2
+- Tool adapters (`T1–T6`): apksigner, apktool 3.x, jadx, apkanalyzer benchmark, bundletool, preflight
+- Device corpus (`D1–D5`): ADB list/pull/sync, SQLite corpus, stats
+- Report intelligence (`I1–I6`): permission catalog, granted-state parser, signing panel, exports
+- Workstation UX (`U1–U4` partial): services layer, web device/corpus APIs, expanded CLI
+
 ## Next Slice
 
-Competitive hardening based on the audited 2026 strategy (second-pass
-confirmed against live stack + APKLab/RevEng/MASTG/apktool 3.0/Play policy):
-
-1. Provider abstraction with provenance
-2. Official-tool adapters (`apksigner`, `apkanalyzer`, `jadx`, `apktool`, `bundletool`)
-3. Doctor expansion (report missing engines + install hints)
-4. First connected-device local corpus slices
-
-Execution details are now fixed in `docs/IMPLEMENTATION_GUIDE.md`; use the
-unique `F`/`T`/`D`/`I`/`U` slice identifiers in `docs/ROADMAP.md`.
-
-Housekeeping noted by second-pass audit: `networkx` is declared but unused;
-drop or defer until call-graph work lands. Blueprint “replace jadx/apktool”
-language was aligned to wrap-first orchestration.
+Post-v1.0 optional work: companion app (`C*`), native hot-path promotion (`R*`),
+CI packaging matrix (`U5`), and live-device conformance expansion (`D6`).
 
 ## Blockers
 - None.

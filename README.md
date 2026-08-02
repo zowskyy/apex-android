@@ -1,6 +1,6 @@
 # APEX — Android Package EXaminer
 
-APEX is a security-first Android reverse-engineering application with a CLI
+APEX v1.0 is a security-first Android reverse-engineering workstation with a CLI
 and a private, local web interface. It inspects APK metadata, decodes binary
 Android formats, decompiles DEX bytecode, builds editable projects, verifies
 round trips, compares packages, and reports static security signals.
@@ -43,6 +43,11 @@ apex security-scan app.apk
 apex diff old.apk new.apk
 apex framework-check app.apk
 apex doctor
+apex device list
+apex device sync --serial SERIAL
+apex bundle inspect app.aab
+apex icon app.apk -o icon.png
+apex export app.apk --out export/
 ```
 
 To open the local interface:

@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "source": "aosp-derived-subset",
+  "permissions": {
+    "android.permission.INTERNET": {
+      "label": "Internet",
+      "description": "Allows applications to open network sockets.",
+      "protection_level": ["normal"]
+    },
+    "android.permission.CAMERA": {
+      "label": "Camera",
+      "description": "Required to access the camera device.",
+      "protection_level": ["dangerous"]
+    },
+    "android.permission.RECORD_AUDIO": {
+      "label": "Microphone",
+      "description": "Allows an application to record audio.",
+      "protection_level": ["dangerous"]
+    },
+    "android.permission.READ_EXTERNAL_STORAGE": {
+      "label": "Read external storage",
+      "description": "Allows an application to read from external storage.",
+      "protection_level": ["dangerous"]
+    },
+    "android.permission.WRITE_EXTERNAL_STORAGE": {
+      "label": "Write external storage",
+      "description": "Allows an application to write to external storage.",
+      "protection_level": ["dangerous"]
+    },
+    "android.permission.ACCESS_FINE_LOCATION": {
+      "label": "Precise location",
+      "description": "Allows an app to access precise location.",
+      "protection_level": ["dangerous"]
+    },
+    "android.permission.ACCESS_COARSE_LOCATION": {
+      "label": "Approximate location",
+      "description": "Allows an app to access approximate location.",
+      "protection_level": ["dangerous"]
+    },
+    "android.permission.READ_CONTACTS": {
+      "label": "Read contacts",
+      "description": "Allows an application to read the user's contacts data.",
+      "protection_level": ["dangerous"]
+    },
+    "android.permission.READ_SMS": {
+      "label": "Read SMS",
+      "description": "Allows an application to read SMS messages.",
+      "protection_level": ["dangerous"]
+    },
+    "android.permission.RECEIVE_BOOT_COMPLETED": {
+      "label": "Run at startup",
+      "description": "Allows an application to receive the ACTION_BOOT_COMPLETED broadcast.",
+      "protection_level": ["normal"]
+    },
+    "android.permission.QUERY_ALL_PACKAGES": {
+      "label": "Query all packages",
+      "description": "Allows an application to see all installed packages.",
+      "protection_level": ["normal"]
+    }
+  }
+}
