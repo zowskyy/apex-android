@@ -125,6 +125,37 @@ Delivered:
 - Workstation UX (`U1–U5`): services layer, Devices tab, Corpus dashboard, SARIF, managed tool install
 - Companion (`C`): buildable Kotlin app in `tools/companion/`
 
+### Cross-platform frontier suite (delivered)
+
+Shipped as core capability, not add-ons, wired through workflows, CLI, web UI,
+JSON, and SARIF:
+
+- **Tracker + third-party library detection** (`apex/intel/`): offline bundled
+  signature set matched against Android DEX class prefixes and iOS
+  frameworks/dylibs. No network access.
+- **iOS analysis** (`apex/ios/`): bounded Mach-O parser (PIE, FairPlay
+  encryption, stack canary, ARC, dylibs, code signature), `Info.plist`, and
+  Apple `PrivacyInfo.xcprivacy` privacy-manifest analysis with Required Reason
+  API checks. `.ipa` files auto-route through `inspect`/`analyze`.
+- **CycloneDX 1.5 SBOM** (`apex/reporting/sbom.py`, `apex sbom`).
+- **Secret detection** (`apex/security/secrets.py`): pattern + entropy gated,
+  always redacted before entering findings/reports.
+- **Expanded security rules with MASVS/CWE** (`apex/security/rules.py`):
+  exported components, network security config, cleartext, secrets, iOS ATS and
+  binary hardening — all carried into SARIF.
+- **Unified cross-platform privacy posture** (`apex/intel/privacy_posture.py`):
+  a single graded assessment that correlates declared intent (permissions,
+  privacy manifest) against observed content (trackers, cleartext) and reports
+  declared-vs-actual discrepancies.
+
+### Native optimization promoted from research
+
+`R1` (columnar Rust ZIP inventory FFI) is promoted: `read_inventory` returns one
+dict of parallel arrays instead of one dict per entry, removing the per-entry
+`set_item` overhead that previously made the native metadata path slower than
+`zipfile.infolist()`. `zip_inventory` now uses it with identical output and is
+faster than the pure-Python path on the representative fixture.
+
 ### Native capability (no external tool required)
 
 Certificate fingerprints, subject/issuer, validity, and signature schemes are

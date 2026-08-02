@@ -1,9 +1,24 @@
 # APEX — Android Package EXaminer
 
-APEX v1.0 is a security-first Android reverse-engineering workstation with a CLI
-and a private, local web interface. It inspects APK metadata, decodes binary
-Android formats, decompiles DEX bytecode, builds editable projects, verifies
-round trips, compares packages, and reports static security signals.
+APEX is a security-first, cross-platform mobile app intelligence workstation with
+a CLI and a private, local web interface. It inspects Android (APK/AAB) and iOS
+(IPA) applications: metadata, binary formats, DEX/Java, Mach-O hardening, trackers
+and third-party libraries, embedded secrets, signing, privacy posture, and static
+security signals — with a CycloneDX SBOM and SARIF for automation. Everything runs
+locally with no telemetry.
+
+## Cross-platform intelligence
+
+- **Tracker & library detection** — offline signature set matches known SDKs in
+  Android DEX classes and iOS frameworks/dylibs (`apex trackers app.apk|app.ipa`).
+- **Privacy posture** — one grade that correlates declared intent (permissions,
+  Apple `PrivacyInfo.xcprivacy`) against observed content (trackers, cleartext),
+  flagging declared-vs-actual discrepancies (`apex privacy app.apk|app.ipa`).
+- **iOS analysis** — Mach-O hardening (PIE, encryption, stack canary, ARC,
+  dylibs), `Info.plist`, and privacy manifest (`apex ios app.ipa`).
+- **SBOM** — CycloneDX 1.5 export (`apex sbom app.apk|app.ipa`).
+- **Secrets & MASVS** — embedded credential detection (redacted) and security
+  findings mapped to CWE and OWASP MASVS, emitted as SARIF.
 
 ## Install
 
@@ -39,10 +54,14 @@ apex decode app.apk --out project
 apex build project --out rebuilt.apk
 apex verify rebuilt.apk
 apex roundtrip app.apk --work roundtrip
-apex security-scan app.apk
+apex security-scan app.apk --format sarif
 apex diff old.apk new.apk
 apex framework-check app.apk
 apex doctor
+apex trackers app.apk
+apex privacy app.apk
+apex sbom app.apk --out app.cdx.json
+apex ios app.ipa
 apex device list
 apex device sync --serial SERIAL
 apex bundle inspect app.aab

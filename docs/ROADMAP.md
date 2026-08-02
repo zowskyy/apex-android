@@ -21,7 +21,22 @@ v1.0.** Nothing essential is staged for a later release.
 | `I` report intelligence | Delivered |
 | `U` workstation UX and automation | Delivered |
 | `C` Android companion | Delivered as buildable source in `tools/companion/` |
-| `R` native hot-path research | Ongoing research; **never gates a user capability** |
+| `X` cross-platform frontier suite | Delivered — trackers, iOS/Mach-O, SBOM, secrets, MASVS, privacy posture |
+| `R` native hot-path research | `R1` promoted; `R2`–`R5` ongoing; **never gates a user capability** |
+
+### `X` cross-platform frontier suite (delivered)
+
+Shipped as core capability across CLI, web UI, JSON, and SARIF:
+
+- `X1` tracker + third-party library detection (Android + iOS, offline signatures)
+- `X2` iOS `.ipa` engine: Mach-O hardening, `Info.plist`, `PrivacyInfo.xcprivacy`
+- `X3` CycloneDX 1.5 SBOM export
+- `X4` embedded secret detection (redacted) + MASVS/CWE security rule catalog
+- `X5` unified cross-platform privacy posture with declared-vs-actual discrepancies
+
+Genuine remaining frontier (new hardware/runtime, not withheld essentials):
+dynamic/runtime analysis (Frida, live network capture) requires a device or
+emulator and is tracked separately from this static, offline suite.
 
 Per [`PRINCIPLES.md`](PRINCIPLES.md), a capability may not be deferred because
 it is more work. The only legitimate future items are those requiring new
@@ -751,7 +766,7 @@ Run independently and promote only after evidence.
 
 | Slice | Research outcome | Promotion gate |
 |---|---|---|
-| `R1` | batch/columnar Rust ZIP inventory FFI | faster than Python on representative corpus without schema loss |
+| `R1` | **PROMOTED** — columnar Rust ZIP inventory FFI (`read_inventory`); one dict of parallel arrays, wired into `zip_inventory` | met: identical output, faster than Python on the representative fixture |
 | `R2` | PyO3 Rust DEX structural index | semantic parity with Androguard on corpus and lower measured cost |
 | `R3` | native AXML/ARSC hot path | parity on malformed/OEM/resource corpus |
 | `R4` | native signing-block reader | conformance with apksigner across schemes/lineage corpus |
