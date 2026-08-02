@@ -483,3 +483,77 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+# Public API v0.2.  Imports are intentionally placed at the end so existing
+# integrations that imported helpers from ``apex`` keep working while the
+# implementation lives in focused modules.
+from .analysis import (  # noqa: E402,F401
+    ApexError,
+    _native_zip,
+    build_crossrefs,
+    build_reachability,
+    decode_binary_xml,
+    dex_metadata,
+    diff_indexes,
+    export_minimal_bundle,
+    extract_apk,
+    inspect_apk,
+    inventory_files,
+    resource_table_info,
+    sanitized_zip_name,
+    scan_dex_metadata,
+    scan_native_libs,
+    scan_resources,
+    sha256_file,
+)
+from .cli import main  # noqa: E402,F401
+from .workflows import (  # noqa: E402,F401
+    PostgresStore,
+    SQLiteStore,
+    analyze_apk,
+    build_project,
+    decode_apk,
+    decompile_apk,
+    diff_apks,
+    doctor,
+    framework_check,
+    roundtrip_verify,
+    security_scan,
+    verify_apk,
+)
+
+analyze = analyze_apk
+
+__all__ = [
+    "ApexError",
+    "PostgresStore",
+    "SQLiteStore",
+    "analyze",
+    "analyze_apk",
+    "build_crossrefs",
+    "build_project",
+    "build_reachability",
+    "decode_apk",
+    "decode_binary_xml",
+    "decompile_apk",
+    "dex_metadata",
+    "diff_apks",
+    "diff_indexes",
+    "doctor",
+    "export_minimal_bundle",
+    "extract_apk",
+    "framework_check",
+    "inspect_apk",
+    "inventory_files",
+    "main",
+    "resource_table_info",
+    "roundtrip_verify",
+    "sanitized_zip_name",
+    "scan_dex_metadata",
+    "scan_native_libs",
+    "scan_resources",
+    "security_scan",
+    "sha256_file",
+    "verify_apk",
+]

@@ -1,5 +1,11 @@
 # PROJECT_BLUEPRINT.md — APEX (Android Package EXaminer)
 
+> **Release status (v0.2.0):** All user-visible phases are available through
+> the CLI and local web UI. The release follows the risk-register strategy of
+> wrapping mature Androguard/apktool/Android SDK capabilities while retaining
+> the native Rust ZIP and DEX cores. “Native replacement” items below are
+> continuing implementation goals, not blockers for a complete application.
+
 ## Vision
 
 A single unified tool that replaces the current two-tool workflow (apktool for decode/rebuild + jadx for decompilation/analysis) with one CLI + optional GUI that does both — faster, safer, and with more developer options than either tool alone.

@@ -1,2 +1,3 @@
 from apex import main
-main()
+
+raise SystemExit(main())
