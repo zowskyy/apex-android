@@ -1,7 +1,5 @@
 """Wrapper launcher inventory."""
 
-from pathlib import Path
-
 from apex.wrappers_info import REPO_ROOT, wrapper_matrix
 
 
