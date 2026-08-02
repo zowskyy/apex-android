@@ -120,3 +120,55 @@ Before declaring any work complete, verify:
 
 Genuinely future work is limited to capability requiring new research, new
 hardware, or demonstrated new user demand — never parts of the current promise.
+
+---
+
+## 7. End-to-end wiring
+
+**A capability in only one layer is a stub, not a shipped feature.**
+
+Every user-facing capability must be wired through the full stack:
+
+```text
+User → CLI / web / API → services → domain logic → persistence / providers →
+response → presentation → tests → docs
+```
+
+Rules:
+
+- No orphan modules that nothing imports or calls
+- CLI and web share the same service layer — no duplicated business logic
+- API endpoints return real data, never mocks or permanent placeholders
+- Errors propagate with actionable messages at every layer
+- At least one test exercises the same path a user would take
+
+See the global skill `end-to-end-wiring` in `.cursor/skills/`.
+
+---
+
+## 8. Marketplace-ready release
+
+**What we describe is what we ship.**
+
+APEX is built to compete on merit in public. That means:
+
+- README, help text, and UI copy match actual behavior
+- A new user can install and complete the primary workflow from published steps
+- No demo/mock data in production code paths
+- UI is polished: no truncated hashes, broken layout, or unexplained empty panels
+- Security findings are evidence-based; signing claims state what crypto proves
+- Third-party licenses and bundled data provenance are documented
+- Known limitations are stated plainly — never hidden as "coming soon"
+
+Before declaring a release ready, run the checklist in the global skill
+`marketplace-ready-release` (`.cursor/skills/`).
+
+### The finished-product test
+
+Imagine listing APEX on a marketplace next to the category leader. A reviewer
+must be able to complete every advertised workflow in the first session without
+undocumented setup, insider knowledge, or "install X yourself" steps for core
+value.
+
+You cannot sell a hamburger with only the bun. Ship the patty, condiments, and
+the standards that make it safe to eat.

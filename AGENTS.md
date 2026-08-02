@@ -12,6 +12,22 @@ not as a later addition, optional extra, or premium tier.
 Read `docs/PRINCIPLES.md` before planning any work. It governs scope decisions
 and overrides any roadmap sequencing that would defer core capability.
 
+### Global skills (apply to every project)
+
+Install and follow the skills in `.cursor/skills/` (see
+`.cursor/skills/README.md`). These are the canonical, version-controlled
+copies; symlink or copy them to `~/.cursor/skills/` for global agent use.
+
+| Skill | Purpose |
+|---|---|
+| `complete-suite-delivery` | Ship the full suite now — no withheld essentials |
+| `end-to-end-wiring` | Wire every layer before merge — no orphan modules |
+| `marketplace-ready-release` | Release only what matches the public description |
+
+**The finished-product test:** you cannot sell a hamburger with only the bun
+and lettuce. Every advertised workflow must work end to end, across every
+interface, with the safety and polish expected of a marketplace competitor.
+
 Practical consequences for contributors and agents:
 
 - Do not defer an obvious user need to a future phase.
@@ -20,6 +36,8 @@ Practical consequences for contributors and agents:
   tools are cross-checks or accelerators.
 - Do not implement a capability in one interface only. If it exists in the
   engine, expose it in the CLI, the JSON API, and the web UI.
+- Do not merge code that is not wired through services → CLI → web → tests.
+- Do not ship UI with placeholder data, truncated values, or silent empty states.
 - "Handles a missing dependency without crashing" is required engineering.
   It is never a substitute for the capability itself.
 

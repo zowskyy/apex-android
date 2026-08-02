@@ -136,7 +136,10 @@ apex tools list
 apex tools install jadx
 ```
 
-See `docs/PRINCIPLES.md`.
+See `docs/PRINCIPLES.md` and the global agent skills in `.cursor/skills/`
+(`complete-suite-delivery`, `end-to-end-wiring`, `marketplace-ready-release`).
+These govern how APEX is built and released: the full suite ships now, every
+layer is wired before merge, and public descriptions must match reality.
 
 ## Development
 
