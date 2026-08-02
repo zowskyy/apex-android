@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any
 
 from .analysis import ApexError, diff_indexes, inspect_apk
+from .edition import EditionError, Feature, require_feature
+from .version import __version__
 from .web import serve
 from .workflows import (
     PostgresStore,
@@ -25,7 +27,7 @@ from .workflows import (
     verify_apk,
 )
 
-VERSION = "0.2.0"
+VERSION = __version__
 
 
 def _print(data: Any, output: str | None = None) -> None:
@@ -108,6 +110,14 @@ def build_parser() -> argparse.ArgumentParser:
     gui_cmd.add_argument("--port", type=int, default=8765)
     gui_cmd.add_argument("--workspace", default=".apex-web")
     gui_cmd.add_argument("--no-browser", action="store_true")
+
+    mcp_cmd = sub.add_parser("mcp", help="start the MCP server for AI assistant integration (Pro)")
+    mcp_cmd.add_argument(
+        "license_action",
+        nargs="?",
+        choices=["show-key"],
+        help="show-key: print the evaluation Pro license key",
+    )
     return parser
 
 
@@ -117,11 +127,12 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "inspect":
             _print(inspect_apk(Path(args.apk), include_files=args.files), args.output)
         elif args.command == "analyze":
-            store = (
-                SQLiteStore(Path(args.db))
-                if args.db
-                else (PostgresStore(args.pg) if args.pg else None)
-            )
+            store = None
+            if args.db:
+                store = SQLiteStore(Path(args.db))
+            elif args.pg:
+                require_feature(Feature.POSTGRES_STORE)
+                store = PostgresStore(args.pg)
             abi = [item for item in args.abi.split(",") if item] or None
             report = analyze_apk(Path(args.apk), Path(args.out), abi, store)
             print(f"JSON report: {Path(args.out) / 'report.json'}")
@@ -185,7 +196,26 @@ def main(argv: list[str] | None = None) -> int:
                 Path(args.workspace),
                 open_browser=not args.no_browser,
             )
+        elif args.command == "mcp":
+            if args.license_action == "show-key":
+                from .edition import generate_demo_license_key
+
+                _print(
+                    {
+                        "entitlement": "demo",
+                        "license_key": generate_demo_license_key(),
+                        "license_file_example": {
+                            "edition": "pro",
+                            "entitlement": "demo",
+                            "key": generate_demo_license_key(),
+                        },
+                    }
+                )
+                return 0
+            from .mcp_server import run_mcp_server
+
+            run_mcp_server()
         return 0
-    except (ApexError, OSError, ValueError, json.JSONDecodeError) as exc:
+    except (ApexError, EditionError, OSError, ValueError, json.JSONDecodeError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

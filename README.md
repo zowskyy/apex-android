@@ -101,5 +101,68 @@ fixtures for extraction and traversal regression tests.
 
 ## License
 
-APEX is MIT licensed. Third-party parsers and tools retain their own licenses;
-Androguard is used under Apache License 2.0.
+APEX Community edition is MIT licensed. Third-party parsers and tools retain
+their own licenses; see `NOTICE`. Androguard is used under Apache License 2.0.
+
+## Editions
+
+| Capability | Community | Pro |
+|------------|-----------|-----|
+| CLI inspect / analyze / decompile / decode / build | Yes | Yes |
+| Local web UI (`apex gui`) | Yes | Yes |
+| Security scan & roundtrip verification | Yes | Yes |
+| MCP server for AI assistants | — | Yes |
+| PostgreSQL report storage | — | Yes |
+| Batch automation workflows | — | Yes |
+
+Activate Pro with a license key:
+
+```bash
+export APEX_LICENSE_KEY="$(apex mcp show-key | python -c 'import sys,json; print(json.load(sys.stdin)["license_key"])')"
+export APEX_ENTITLEMENT=demo
+apex doctor
+```
+
+Or write `~/.apex/license.json`:
+
+```json
+{
+  "edition": "pro",
+  "entitlement": "demo",
+  "key": "APEX-PRO-..."
+}
+```
+
+Run `apex mcp show-key` to print the evaluation key. Production keys are derived
+from your customer entitlement ID via `apex.edition.generate_license_key()`.
+
+## MCP integration (Pro)
+
+APEX exposes reverse-engineering tools to Cursor, Claude Desktop, and other
+MCP hosts:
+
+```bash
+pip install "apex-android[mcp]"
+apex mcp
+```
+
+Add to your MCP client config (see `mcp-config.example.json`):
+
+```json
+{
+  "mcpServers": {
+    "apex": {
+      "command": "apex",
+      "args": ["mcp"],
+      "env": {
+        "APEX_LICENSE_KEY": "APEX-PRO-...",
+        "APEX_ENTITLEMENT": "demo"
+      }
+    }
+  }
+}
+```
+
+Available tools: `apex_doctor`, `apex_inspect`, `apex_security_scan`,
+`apex_analyze`, `apex_decompile`, `apex_decode`, `apex_verify`, `apex_diff`.
+

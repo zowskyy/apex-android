@@ -20,6 +20,8 @@ from .analysis import (
     sha256_file,
 )
 from .cli import main
+from .edition import Edition, EditionError, Feature, edition_info, generate_license_key
+from .version import __version__
 from .workflows import (
     PostgresStore,
     SQLiteStore,
@@ -39,6 +41,9 @@ analyze = analyze_apk
 
 __all__ = [
     "ApexError",
+    "Edition",
+    "EditionError",
+    "Feature",
     "PostgresStore",
     "SQLiteStore",
     "_native_zip",
@@ -54,9 +59,11 @@ __all__ = [
     "diff_apks",
     "diff_indexes",
     "doctor",
+    "edition_info",
     "export_minimal_bundle",
     "extract_apk",
     "framework_check",
+    "generate_license_key",
     "inspect_apk",
     "inventory_files",
     "main",
@@ -69,4 +76,5 @@ __all__ = [
     "security_scan",
     "sha256_file",
     "verify_apk",
+    "__version__",
 ]

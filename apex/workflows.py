@@ -43,6 +43,7 @@ from .analysis import (
     sha256_file,
     zip_inventory,
 )
+from .version import __version__
 
 
 class Store:
@@ -68,6 +69,9 @@ class SQLiteStore(Store):
 
 class PostgresStore(Store):
     def __init__(self, dsn: str):
+        from .edition import Feature, require_feature
+
+        require_feature(Feature.POSTGRES_STORE)
         try:
             import psycopg
         except ImportError as exc:  # pragma: no cover - optional integration
@@ -827,7 +831,8 @@ def doctor() -> dict[str, Any]:
     except ImportError:
         androguard_version = None
     return {
-        "apex": "0.2.0",
+        "apex": __version__,
+        "edition": __import__("apex.edition", fromlist=["edition_info"]).edition_info(),
         "androguard": androguard_version,
         "native_zip": __import__("apex.analysis", fromlist=["_native_zip"])._native_zip is not None,
         "tools": tools,
