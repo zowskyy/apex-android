@@ -152,9 +152,18 @@ apex/
 
 ## Exit Conditions Per Slice
 
-Every slice follows the Salami cycle: Slice → Implement → Verify → Update PROJECT_STATE.md → Git Commit.
+Every slice follows the Salami cycle:
 
-Verification for each slice is a concrete, runnable test — not "it looks right":
+```text
+Slice → Implement → scripts/validate_slice.sh → Push → GitHub CI green on HEAD →
+Update PROJECT_STATE.md → Git Commit
+```
+
+Verification is concrete and evidenced — not "it looks right":
+
+- **Local:** `scripts/validate_slice.sh` mirrors `.github/workflows/ci.yml`
+- **Remote:** GitHub Actions workflow `CI` must succeed on the pushed commit
+  before the slice is marked done or described as validated
 - Parser slices: parse a real APK's actual bytes and assert specific known values
 - CLI slices: run the command against the F-Droid and NewPipe test APKs from the diagnostics project
 - Performance slices: benchmark against apktool/jadx on the same APK and assert the 10x target

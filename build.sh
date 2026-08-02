@@ -143,3 +143,6 @@ fi
 if [[ -d wrappers/macos/dist ]]; then
   echo "  wrappers/macos/dist/APEX.app"
 fi
+echo ""
+echo "Before push: scripts/validate_slice.sh"
+echo "After push:  scripts/check_github_ci.sh"

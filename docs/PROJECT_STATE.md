@@ -177,6 +177,7 @@ Apache-2.0 terms — not yet done since nothing's been copied in yet.
 - License: MIT
 - Core parsers: Rust (via PyO3)
 - CLI + build pipeline: Python
-- GUI: deferred to Phase 4
-- DEX decompiler: wrap jadx-core initially, replace incrementally
-- Resource compiler: wrap aapt2 initially, replace incrementally
+- GUI: loopback web UI (`apex gui` / `apex mobile`)
+- Slice completion: `scripts/validate_slice.sh` + GitHub Actions `CI` green on HEAD
+- DEX decompiler: Androguard DAD (native `apex_dex_reader` for indexing); jadx wrap optional later
+- Resource compiler: apktool when available; raw lossless backend built-in
