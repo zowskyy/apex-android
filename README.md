@@ -93,10 +93,17 @@ backend is required when source XML or resource definitions are modified.
 ## Competitive strategy
 
 APEX is not trying to become a phone-only metadata browser clone. The audited
-product strategy is a local analysis workstation that matches consumer report
-completeness, then exceeds it with decompile, rebuild, verify, security scan,
-diff, device sync, and automation surfaces. See
-`docs/COMPETITIVE_STRATEGY.md` for the revised roadmap and benchmark targets.
+product strategy (second-pass confirmed against Apktool 3.x, jadx/OWASP MASTG
+guidance, Play package-visibility policy, SDK `apkanalyzer`, and wrapper-style
+peers such as APKLab) is a local analysis workstation that:
+
+- matches consumer report completeness
+- prefers jadx for Java quality, apktool 3.x for compiled-resource rebuild,
+  apksigner for signing truth, and bundletool for AAB
+- keeps Androguard as the metadata/DEX backbone and fallback
+- uses ADB for user-owned device sync rather than casual full inventory scanning
+
+See `docs/COMPETITIVE_STRATEGY.md` for the roadmap and benchmark targets.
 
 ## Development
 

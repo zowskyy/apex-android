@@ -6,14 +6,19 @@
 > the native Rust ZIP and DEX cores. “Native replacement” items below are
 > continuing implementation goals, not blockers for a complete application.
 >
-> **Competitive strategy (audited 2026-08-02):** see
-> `docs/COMPETITIVE_STRATEGY.md` for the revised plan to exceed consumer APK
-> inspection tools while remaining compatible with current Android package
-> visibility, signing, AAB, and reverse-engineering tooling realities.
+> **Competitive strategy (audited 2026-08-02, second pass same day):** see
+> `docs/COMPETITIVE_STRATEGY.md`. Near-term APEX **orchestrates** jadx /
+> apktool 3.x / apksigner / bundletool / apkanalyzer with provenance; native
+> parsers remain for proven hot paths (ZIP security today, more later).
+> “Replace jadx/apktool entirely” is long-horizon research, not the beat plan.
 
 ## Vision
 
-A single unified tool that replaces the current two-tool workflow (apktool for decode/rebuild + jadx for decompilation/analysis) with one CLI + optional GUI that does both — faster, safer, and with more developer options than either tool alone.
+A single local workstation that unifies the current multi-tool Android RE
+workflow (apktool for decode/rebuild, jadx for decompilation, SDK tools for
+signing/AAB/oracle checks) behind one CLI + optional GUI — faster, safer,
+more automatable, and more private than juggling those tools by hand — while
+still using the best engine for each job.
 
 ## Competitive Gap Analysis (Evidence-Based)
 
@@ -24,13 +29,13 @@ A single unified tool that replaces the current two-tool workflow (apktool for d
 - ProGuard/R8 mapping file support for de-obfuscation
 - Gradle project export
 
-### What jadx does poorly (and we beat)
-- OOMs on large APKs (4GB+ RAM usage on 36MB APK, issue #469)
-- High CPU in background even when idle (issues #1000, #1413)
-- Slow single-file decompilation (issue #1345)
-- Fails on non-ASCII characters in some paths
-- "Show inconsistent code" is the only fallback for failed decompilation — no partial recovery
-- No rebuild capability at all
+### What jadx does poorly (and we beat *as a product*)
+- OOMs on large APKs (4GB+ RAM usage on 36MB APK, issue #469) — mitigate with lazy/on-demand class decompile and process isolation
+- High CPU in background even when idle (issues #1000, #1413) — CLI subprocess model avoids idle GUI cost
+- Slow single-file decompilation (issue #1345) — prefer `--single-class` on-demand paths in UI
+- Fails on non-ASCII characters in some paths — sanitize workspace paths in APEX
+- Limited rebuild capability — APEX owns rebuild orchestration via apktool/raw backends
+- Not a full analysis workstation — APEX adds inspect, security, device sync, diff, verify
 
 ### What apktool does well (and we must match)
 - Lossless resource decode (resources.arsc → XML)
@@ -58,13 +63,18 @@ A single unified tool that replaces the current two-tool workflow (apktool for d
 
 ## 10x Performance Target
 
-| Operation | jadx/apktool today | APEX target | How |
+These remain stretch research goals for native hot paths. Competitive beat
+criteria for v0.3+ are defined in `docs/COMPETITIVE_STRATEGY.md` (report
+parity, jadx-quality decompile, automation/JSON, device sync, privacy) and
+must not be confused with unproven 10x claims.
+
+| Operation | jadx/apktool today | APEX stretch target | Near-term approach |
 |---|---|---|---|
-| Full decode (12MB APK) | ~8-12s (apktool) | <1s | Rust binary parser for resources.arsc + parallel dex decode |
-| Metadata-only inspect | Not possible (full decode required) | <100ms | Stream zip central directory + arsc header only |
-| DEX → Java decompile | ~15-30s (jadx, single-threaded per class) | <3s | Parallel decompilation across all CPU cores, lazy on-demand per-class |
-| Rebuild from modified sources | ~10-20s (apktool) | <2s | Incremental rebuild (only reprocess changed files) |
-| Memory on 36MB APK | 4GB+ (jadx OOMs) | <512MB | Streaming parser, no full-file buffering |
+| Full decode (12MB APK) | ~8-12s (apktool) | <1s | Wrap apktool; accelerate inspect via native ZIP/metadata |
+| Metadata-only inspect | Not possible (full decode required) | <100ms | Stream zip central directory + selective parsers |
+| DEX → Java decompile | ~15-30s (jadx full tree) | Fast interactive class view | jadx `--single-class` + Androguard fallback |
+| Rebuild from modified sources | ~10-20s (apktool) | Faster incremental later | apktool 3.x wrapper now |
+| Memory on large APKs | jadx GUI can be heavy | Bounded worker processes | Subprocess isolation, lazy decompile |
 
 ## Architecture
 
@@ -144,7 +154,16 @@ apex/
 3.4  Incremental rebuild — only reprocess changed files, cache unchanged resources
 3.5  `apex diff <apk1> <apk2>` — semantic diff between two APK versions
 3.6  ProGuard/R8 mapping support — de-obfuscate class/method names during decompile
-3.7  AAB (Android App Bundle) support — decode/analyze without bundletool dependency
+3.7  AAB (Android App Bundle) support — wrap `bundletool` first for `.aab` → `.apks` / device targeting; native AAB only if a proven gap remains
+```
+
+### Phase 3b / Competitive hardening (see COMPETITIVE_STRATEGY.md)
+```
+C.1  Provider abstraction + provenance for jadx/apktool/apksigner/apkanalyzer/bundletool/androguard/rust
+C.2  apex device list/pull/sync — ADB local corpus
+C.3  Permission catalog + granted-state enrichment
+C.4  Signing UX via apksigner oracle
+C.5  Web UI Devices tab + corpus stats
 ```
 
 ### Phase 4: GUI + Polish (Slices 4.1–4.4)
@@ -187,6 +206,7 @@ Directly portable into APEX:
 | Risk | Mitigation |
 |---|---|
 | Rust learning curve | Start with Python wrappers calling Rust via PyO3; incrementally move hot paths to Rust |
-| DEX → Java decompiler is a multi-year project | Start by wrapping jadx-core as a library; replace incrementally |
-| aapt2 replacement is enormous | Wrap aapt2 initially for rebuild; replace with own resource compiler only after decode path is solid |
-| Scope creep | Each slice has a concrete exit condition; no slice proceeds without the previous one verified |
+| DEX → Java decompiler is a multi-year project | Prefer jadx CLI/provider for quality; keep Androguard fallback; native emitter is research only |
+| aapt2 / compiled-resource rebuild is enormous | Wrap apktool 3.x (aapt2-only); raw backend for lossless archive edits |
+| External tool drift (jadx/apktool/SDK) | Provider abstraction, version pinning, doctor diagnostics, fallbacks |
+| Scope creep | Each slice has a concrete exit condition; competitive slices follow COMPETITIVE_STRATEGY.md |

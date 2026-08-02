@@ -1,7 +1,7 @@
 # COMPETITIVE_STRATEGY.md — Beat APK Analyzer and stay ahead of current RE tooling
 
 Date: 2026-08-02  
-Status: audited and revised against current Android/tooling practice  
+Status: second-pass audited against current Android/tooling practice and APEX codebase utilization  
 Scope: APEX v0.3+ product strategy, not current v0.2 capabilities
 
 ---
@@ -9,6 +9,8 @@ Scope: APEX v0.3+ product strategy, not current v0.2 capabilities
 ## Executive verdict
 
 The prior strategy is directionally right but **technically overbroad**. APEX should **not** try to become a phone-first clone of Martin Styk's [APK Analyzer](https://play.google.com/store/apps/details?id=sk.styk.martin.apkanalyzer). It should become the **fastest local analysis workstation** that also offers **device-aware workflows** through ADB, wireless debugging, and a companion app.
+
+**Second-pass confirmation (2026-08-02):** after re-checking OWASP MASTG decompile guidance, Apktool 3.0.0 release notes, Play `QUERY_ALL_PACKAGES` policy, Android SDK `apkanalyzer` docs, and comparable wrappers (APKLab, RevEng-IDE, JADX-NO-MCP, PulseAPK), plus the live APEX stack in this repo, the revised strategy still holds. The main remaining problem is **doc/code drift**: `PROJECT_BLUEPRINT.md` still reads like a native jadx/apktool replacement program, while the shipped v0.2 code and this strategy correctly treat those tools as preferred providers.
 
 ### What survives the audit
 
@@ -72,6 +74,58 @@ The prior strategy is directionally right but **technically overbroad**. APEX sh
 | Androguard | Excellent Python-native parsing, static analysis, and programmatic access. | Keep it for metadata, DEX indexing, and fallback decompile; not the sole Java engine. |
 | browser-only APK analyzers | Strong privacy posture and zero-upload story. | APEX should emphasize local-only analysis and possibly later add browser/WASM surfaces. |
 | droidsaw / similar Rust-native suites | Rust-native, offline, taint-analysis-forward, agent-friendly. | APEX’s long-term differentiation should include native hot paths + agent-friendly JSON/SARIF surfaces. |
+| APKLab (VS Code) | Mature wrapper pattern: apktool + jadx + uber-apk-signer + configurable tool paths + Apktool 3.0 CLI awareness. | APEX should copy the **provider orchestration** model, not invent a parallel IDE plugin. |
+| RevEng-IDE / similar desktop suites | One-click decode+decompile pipeline with auto-downloaded tool jars, ADB install, Frida adjacent. | Tool bootstrap + version pinning belong in `apex doctor` / first-run setup. |
+| JADX-NO-MCP / AI-oriented wrappers | Early packer detection before expensive decompile; AI-friendly Markdown/JSON exports; call-graph export. | Add cheap preflight heuristics before jadx; keep agent-friendly report surfaces. |
+| PulseAPK | Frontend over apktool + signer with Smali-focused security regex scans. | Confirms rebuild/sign remain wrapper work; APEX’s edge is deeper DEX/Java + automation. |
+
+---
+
+## Second-pass audit — codebase vs modern methods
+
+This pass checked what APEX **actually ships and uses**, not only what the strategy claims.
+
+### Live stack observed in this checkout (v0.2)
+
+| Component | Present | Used on product path? | Audit note |
+|---|---|---|---|
+| Androguard 4.1.4 | Yes | Yes — AXML/ARSC/DEX/Java (`DecompilerDAD`), verify cert counts | Correct metadata backbone; **incorrect sole long-term Java engine** |
+| Rust `apex_zip_reader` | Yes (installed) | Yes — preferred extract with Python fallback | Keep; security-differentiated |
+| Rust `apex_dex_parser` | Yes (rlib) | No — not PyO3-bridged into CLI/UI | Keep as validation/evolution layer; do not block product slices on bridging |
+| jinja2 | Yes | Yes — HTML report template only | Fine; not a competitive dependency |
+| networkx | Declared in `setup.py` | **No imports anywhere** | Drop or defer until call-graph work needs it |
+| apkInspector / asn1crypto / cryptography | Transitive via Androguard | Not used directly by APEX | Do not treat as APEX capabilities |
+| apktool / apksigner / adb / aapt2 | Optional PATH/env | Detected by `doctor`, mostly null in this env | Strategy depends on them; doctor should also report jadx, bundletool, apkanalyzer |
+| jadx | Not integrated | No | Highest-priority missing provider |
+| bundletool / apkanalyzer | Not integrated | No | Needed for AAB + official oracle benchmarks |
+
+### What modern comparable projects do that APEX should copy
+
+1. **Wrap first, unify second.** APKLab / RevEng-IDE / JADX-NO-MCP all treat jadx + apktool (+ signer) as the engines and compete on orchestration, UX, automation, and reports. APEX’s blueprint “replace jadx/apktool” language is aspirational R&D, **not** the competitive path.
+2. **CLI subprocess providers before JVM embedding.** jadx-as-library is a Java API. From Python, the credible v0.3 approach is version-pinned `jadx` / `jadx-cli` subprocess with `--single-class` for on-demand UI, plus timeout and provenance. Library embedding can wait.
+3. **Separate oracles by domain.**  
+   - `apkanalyzer` → manifest permissions, DEX refs, resources, APK compare/size  
+   - `apksigner verify --print-certs` → signing schemes, cert fingerprints, warnings  
+   - Do not expect `apkanalyzer` to replace signing UX.
+4. **Cheap preflight before decompile.** Packer/protector heuristics (zip/DEX shape) before invoking jadx avoids wasted minutes — already common in AI-oriented wrappers.
+5. **Tool bootstrap.** Successful wrappers auto-download or clearly guide apktool/jadx/signer jars. `apex doctor` should diagnose *and* point to install/bootstrap, not only print `null`.
+
+### Blueprint contradictions that this audit resolves
+
+| Blueprint claim | Audited correction |
+|---|---|
+| “Replaces apktool + jadx workflow” | **Orchestrates and exceeds them**; does not displace their engines on day one |
+| “AAB without bundletool dependency” (slice 3.7) | **Wrap bundletool first**; native AAB only if a proven hot-path gap appears |
+| “Wrap jadx-core, replace incrementally” as Key Decision | **Wrap jadx as preferred Java provider**; native decompiler remains research, not the beat criterion |
+| Raw 10x decompile/memory targets as near-term proof | Keep as stretch research goals; competitive beat criteria are provenance, quality, automation, device sync, privacy |
+
+### Signing path gap (code-specific)
+
+`verify_apk()` today uses Androguard `APK.get_certificates()` for scheme booleans and certificate counts. That is fine for a presence check. Competitive cert UX still requires **`apksigner verify --print-certs`** (and optionally `--print-certs-pem`) as the correctness path, with Androguard/native parsers as faster secondary views.
+
+### Permission / device gap (policy reconfirmed)
+
+Play still treats installed-app inventory as sensitive and restricts `QUERY_ALL_PACKAGES` to narrow core-purpose cases (device search, antivirus/security, file managers, browsers, etc.). Even if a companion later qualifies as a security app, **desktop ADB sync for the user’s own device remains the primary path** and avoids Play distribution risk for the workstation product.
 
 ---
 
@@ -178,11 +232,13 @@ flowchart TB
 
 | Slice | Deliverable | Benchmark target |
 |---|---|---|
-| 1.1 | Add provider abstraction with explicit backend provenance in every report | Every report says `provider=androguard|jadx|apktool|apksigner|rust` |
-| 1.2 | Add `apksigner verify --print-certs` provider path | cert output parity with official SDK |
-| 1.3 | Add `apkanalyzer` benchmark adapter for permissions, DEX references, resources, compare | side-by-side comparison against official CLI |
-| 1.4 | Add jadx provider for Java decompile with version pinning and timeout handling | jadx output quality > Androguard fallback |
-| 1.5 | Add apktool 3.x provider detection and framework diagnostics | correct modern rebuild behavior |
+| 1.1 | Add provider abstraction with explicit backend provenance in every report | Every report says `provider=androguard|jadx|apktool|apksigner|apkanalyzer|bundletool|rust` plus tool version when known |
+| 1.2 | Add `apksigner verify --print-certs` provider path; keep Androguard cert counts as fallback | cert output parity with official SDK |
+| 1.3 | Add `apkanalyzer` benchmark adapter for permissions, DEX references, resources, compare | side-by-side comparison against official CLI (not used as signing oracle) |
+| 1.4 | Add jadx CLI provider (`--single-class` for on-demand) with version pin, timeout, Androguard fallback | jadx output quality ≥ Androguard on fixture corpus |
+| 1.5 | Add apktool 3.x provider detection (aapt2-only assumptions) and framework diagnostics | correct modern rebuild behavior; refuse silent aapt1 assumptions |
+| 1.6 | Expand `apex doctor` for jadx/bundletool/apkanalyzer + install hints / optional jar bootstrap | missing tools are actionable, not silent `null` |
+| 1.7 | Optional cheap packer/protector preflight before full decompile | fail-fast on known packer shapes |
 
 ### Phase 2 — Device-aware local corpus
 
@@ -259,11 +315,13 @@ flowchart TB
 
 ## Concrete first engineering slices
 
-1. **Provider abstraction + apksigner/apkanalyzer/jadx/apktool integration**
+1. **Provider abstraction + provenance + doctor expansion** (jadx / apktool 3.x / apksigner / apkanalyzer / bundletool)
 2. **`apex device sync` and SQLite-backed local corpus index**
 3. **Permission catalog + granted-state enrichment**
-4. **Signing UX upgrade**
+4. **Signing UX upgrade via apksigner oracle**
 5. **Web UI Devices tab + corpus stats**
+
+Housekeeping that should ride with slice 1.1: remove unused `networkx` until a call-graph feature imports it; align blueprint language with this document so “replace jadx/apktool” is not misread as the near-term plan.
 
 ---
 
@@ -277,4 +335,4 @@ APEX should **not** fight APK Analyzer by becoming another phone-only metadata b
 - more automation-friendly
 - still device-aware for the user’s own phone
 
-That is the strategy that fits both current Android platform policy and current 2026 reverse-engineering tooling reality.
+**Second-pass bottom line:** the winning architecture is the same one successful 2025–2026 RE workstations already use — **orchestrate best-of-breed providers with provenance**, keep native code for proven hot paths (ZIP security, later parsers), and use ADB for device truth. Replacing jadx/apktool/apksigner/bundletool natively is research debt, not the competitive strategy.
