@@ -5,6 +5,11 @@
 > wrapping mature Androguard/apktool/Android SDK capabilities while retaining
 > the native Rust ZIP and DEX cores. “Native replacement” items below are
 > continuing implementation goals, not blockers for a complete application.
+>
+> **Competitive strategy (audited 2026-08-02):** see
+> `docs/COMPETITIVE_STRATEGY.md` for the revised plan to exceed consumer APK
+> inspection tools while remaining compatible with current Android package
+> visibility, signing, AAB, and reverse-engineering tooling realities.
 
 ## Vision
 

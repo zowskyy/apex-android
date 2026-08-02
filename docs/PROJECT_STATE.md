@@ -113,10 +113,10 @@ source.
 
 ## Next Slice
 
-Post-release maintenance: expand the native Rust parser coverage and replace
-optional orchestration providers only when their native equivalents meet the
-same correctness corpus. These are implementation substitutions, not missing
-application workflows.
+Competitive hardening based on the audited 2026 strategy:
+provider abstraction with provenance, official-tool benchmark adapters
+(`apksigner`, `apkanalyzer`, `jadx`, `apktool`, `bundletool`), and the first
+connected-device local corpus slices. See `docs/COMPETITIVE_STRATEGY.md`.
 
 ## Blockers
 - None.

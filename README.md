@@ -86,6 +86,17 @@ backend is required when source XML or resource definitions are modified.
 - Security output distinguishes evidence from conclusions; static findings
   are not presented as a malware verdict.
 - The web interface is loopback-only by default and does not execute APK code.
+- Core analysis is local-first and telemetry-free. Future connected-device
+  workflows will favor user-owned-device ADB/pairing flows over broad
+  installed-app visibility.
+
+## Competitive strategy
+
+APEX is not trying to become a phone-only metadata browser clone. The audited
+product strategy is a local analysis workstation that matches consumer report
+completeness, then exceeds it with decompile, rebuild, verify, security scan,
+diff, device sync, and automation surfaces. See
+`docs/COMPETITIVE_STRATEGY.md` for the revised roadmap and benchmark targets.
 
 ## Development
 
