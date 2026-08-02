@@ -110,6 +110,18 @@ def build_parser() -> argparse.ArgumentParser:
     gui_cmd.add_argument("--port", type=int, default=8765)
     gui_cmd.add_argument("--workspace", default=".apex-web")
     gui_cmd.add_argument("--no-browser", action="store_true")
+    gui_cmd.add_argument(
+        "--mobile",
+        action="store_true",
+        help="listen on all interfaces for phone browser access (same Wi-Fi)",
+    )
+
+    mobile_cmd = sub.add_parser(
+        "mobile",
+        help="start the web UI for phone access on your local network",
+    )
+    mobile_cmd.add_argument("--port", type=int, default=8765)
+    mobile_cmd.add_argument("--workspace", default=".apex-web")
 
     mcp_cmd = sub.add_parser("mcp", help="start the MCP server for AI assistant integration (Pro)")
     mcp_cmd.add_argument(
@@ -195,6 +207,15 @@ def main(argv: list[str] | None = None) -> int:
                 args.port,
                 Path(args.workspace),
                 open_browser=not args.no_browser,
+                mobile=args.mobile,
+            )
+        elif args.command == "mobile":
+            serve(
+                "0.0.0.0",
+                args.port,
+                Path(args.workspace),
+                open_browser=False,
+                mobile=True,
             )
         elif args.command == "mcp":
             if args.license_action == "show-key":

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import socket
 import tempfile
 import threading
 import webbrowser
@@ -19,6 +20,9 @@ from .workflows import decompile_apk, doctor, security_scan
 WEB_APP = r"""<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="APEX">
+<meta name="theme-color" content="#070b13">
 <title>APEX · Android Package EXaminer</title>
 <style>
 :root{color-scheme:dark;--bg:#070b13;--surface:#0e1625;--surface2:#131e30;--line:#263651;--text:#eef4ff;--muted:#8fa1bb;--cyan:#63e6ff;--violet:#8b7cff;--green:#68e69a;--red:#ff7285}
@@ -30,18 +34,19 @@ main{max-width:1240px;margin:auto;padding:42px 28px}.hero{display:grid;grid-temp
 h1{font-size:clamp(35px,5vw,62px);line-height:1.02;letter-spacing:-.045em;margin:0 0 18px}.gradient{background:linear-gradient(90deg,var(--cyan),#b3a8ff);-webkit-background-clip:text;color:transparent}
 .lead{font-size:17px;color:var(--muted);max-width:650px}.drop{border:1px dashed #4f6688;border-radius:18px;min-height:210px;padding:28px;display:grid;place-items:center;text-align:center;background:linear-gradient(145deg,#111d30aa,#0b1321)}
 .drop.drag{border-color:var(--cyan);box-shadow:0 0 40px #63e6ff14}.drop strong{display:block;font-size:18px}.drop p{color:var(--muted);margin:8px 0 17px}
-button,.button{border:0;border-radius:9px;padding:10px 15px;background:linear-gradient(90deg,#27bfdc,#7866e8);color:white;font-weight:700;cursor:pointer}.secondary{background:var(--surface2);border:1px solid var(--line)}
+button,.button{border:0;border-radius:9px;padding:12px 16px;background:linear-gradient(90deg,#27bfdc,#7866e8);color:white;font-weight:700;cursor:pointer;font-size:15px}.secondary{background:var(--surface2);border:1px solid var(--line)}
 input[type=file]{display:none}.pathbar{display:flex;gap:8px;margin-top:12px}.pathbar input{min-width:0;flex:1;background:var(--surface);border:1px solid var(--line);color:var(--text);padding:11px;border-radius:9px}
+.mobile-only{display:none}.desktop-only{display:block}
 .hidden{display:none!important}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin:20px 0}.metric,.panel{border:1px solid var(--line);background:linear-gradient(145deg,var(--surface2),var(--surface));border-radius:14px;padding:17px}.metric .n{font-size:27px;font-weight:750}.metric .l{color:var(--muted);font-size:12px}
 .columns{display:grid;grid-template-columns:1fr 1fr;gap:14px}.panel h2{font-size:15px;margin:0 0 14px;color:#cfe8ff}.kv{display:grid;grid-template-columns:130px 1fr;gap:8px;border-bottom:1px solid #23314a;padding:8px 0}.kv span:first-child{color:var(--muted)}
 .pill{display:inline-block;padding:4px 9px;border-radius:20px;background:#1a2a43;margin:3px;color:#bed4ef}.finding{border-left:3px solid var(--red);padding:9px 12px;background:#21131b;margin:8px 0;border-radius:4px}.finding.low{border-color:#e7c65e}
 pre{white-space:pre-wrap;word-break:break-word;color:#b9c8dc;max-height:360px;overflow:auto}.empty{color:var(--muted)}.loader{width:24px;height:24px;border:3px solid #273954;border-top-color:var(--cyan);border-radius:50%;animation:spin .8s linear infinite;margin:auto}@keyframes spin{to{transform:rotate(360deg)}}
-footer{color:var(--muted);text-align:center;padding:34px}@media(max-width:800px){.hero,.columns{grid-template-columns:1fr}.grid{grid-template-columns:1fr 1fr}.tag{display:none}}
+footer{color:var(--muted);text-align:center;padding:34px}@media(max-width:800px){header{padding:0 16px;height:60px}.main-pad{padding:24px 16px}.hero,.columns{grid-template-columns:1fr}.grid{grid-template-columns:1fr 1fr}.tag{display:none}.pathbar.desktop-only{display:none}.mobile-only{display:block}.drop{min-height:180px;padding:20px}.lead{font-size:15px}.kv{grid-template-columns:1fr;gap:2px}}
 </style></head>
 <body><header><div class="mark">A</div><div><div class="brand">APEX</div><div class="tag">ANDROID PACKAGE EXAMINER</div></div><div class="spacer"></div><div id="health" class="status">● Engine ready</div></header>
-<main>
+<main class="main-pad">
 <section class="hero"><div><h1>Understand any APK.<br><span class="gradient">Before it understands you.</span></h1><p class="lead">Inspect manifests, permissions, resources, DEX classes, native libraries, and static security signals from one private local workspace.</p></div>
-<div><div id="drop" class="drop"><div><strong>Drop an APK here</strong><p>Files stay on this machine.</p><label class="button" for="file">Choose APK</label><input id="file" type="file" accept=".apk,.zip"></div></div><div class="pathbar"><input id="path" placeholder="/path/to/application.apk"><button id="pathGo" class="secondary">Open path</button></div></div></section>
+<div><div id="drop" class="drop"><div><strong>Drop an APK here</strong><p class="mobile-only">Tap to pick an APK from your phone.</p><p class="desktop-only">Files stay on this machine.</p><label class="button" for="file">Choose APK</label><input id="file" type="file" accept=".apk,.zip,application/vnd.android.package-archive"></div></div><div class="pathbar desktop-only"><input id="path" placeholder="/path/to/application.apk"><button id="pathGo" class="secondary">Open path</button></div></div></section>
 <section id="busy" class="panel hidden"><div class="loader"></div><p style="text-align:center;color:var(--muted)">Analyzing package structure and security signals…</p></section>
 <section id="results" class="hidden">
 <div style="display:flex;align-items:center;gap:12px"><div><h2 id="filename" style="font-size:22px;margin:0"></h2><div id="hash" class="tag"></div></div><div class="spacer"></div><button id="decompile" class="secondary">Decompile Java</button></div>
@@ -180,20 +185,42 @@ class ApexWebHandler(BaseHTTPRequestHandler):
             super().log_message(format, *args)
 
 
+def lan_ip() -> str:
+    """Best-effort LAN address for phone access instructions."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.connect(("8.8.8.8", 80))
+            return sock.getsockname()[0]
+    except OSError:
+        return "127.0.0.1"
+
+
 def serve(
     host: str = "127.0.0.1",
     port: int = 8765,
     workspace: Path | None = None,
     open_browser: bool = True,
+    mobile: bool = False,
 ) -> None:
+    if mobile:
+        host = "0.0.0.0"
+        open_browser = False
+
     workspace = workspace or Path(tempfile.gettempdir()) / "apex-web"
     server = ThreadingHTTPServer((host, port), ApexWebHandler)
     server.workspace = str(workspace)  # type: ignore[attr-defined]
-    url = f"http://{host}:{port}"
-    print(f"APEX web UI: {url}")
+
+    if host == "0.0.0.0":
+        phone_url = f"http://{lan_ip()}:{port}"
+        print("APEX mobile mode — open this URL on your phone (same Wi-Fi):")
+        print(f"  {phone_url}")
+        print("Only use on a trusted network. Analysis runs on this computer.")
+    else:
+        print(f"APEX web UI: http://{host}:{port}")
+
     print(f"Workspace: {workspace}")
     if open_browser:
-        threading.Timer(0.4, lambda: webbrowser.open(url)).start()
+        threading.Timer(0.4, lambda: webbrowser.open(f"http://{host}:{port}")).start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:

@@ -51,8 +51,19 @@ To open the local interface:
 apex gui
 ```
 
-The server binds to `127.0.0.1:8765` by default. Uploaded APKs and generated
-source remain in the configured local workspace.
+### Use on your phone (same Wi-Fi)
+
+APEX runs on your computer; your phone uses it through the browser:
+
+```bash
+apex mobile
+```
+
+Open the printed URL (e.g. `http://192.168.1.42:8765`) on your phone, tap
+**Choose APK**, and pick any APK from your device. Analysis stays on your PC.
+
+The server binds to `127.0.0.1:8765` by default for local-only use. Uploaded
+APKs and generated source remain in the configured local workspace.
 
 ## Decode and build backends
 
