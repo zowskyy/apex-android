@@ -28,11 +28,10 @@ The governing architectural rule is:
 The ordered delivery plan is in [`ROADMAP.md`](ROADMAP.md).
 
 **Agent and contributor standards:** before scoping or shipping work, read
-[`PRINCIPLES.md`](PRINCIPLES.md) and apply the global skills in
-[`.cursor/skills/`](../.cursor/skills/) — especially `complete-suite-delivery`,
-`end-to-end-wiring`, and `marketplace-ready-release`. Do not defer essential
-capability, merge unwired modules, or release features that do not match their
-public description.
+[`PRINCIPLES.md`](PRINCIPLES.md) and apply the global skill
+[`finished-product-delivery`](../.cursor/skills/finished-product-delivery/SKILL.md).
+Do not defer essential capability, merge unwired modules, or release features
+that do not match their public description.
 
 ---
 

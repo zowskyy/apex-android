@@ -1,32 +1,48 @@
-# Global Cursor skills — product delivery standards
+# Global agent skill — finished product delivery
 
-These skills apply to **every project**, not just APEX. Install them into your
-global Cursor skills directory so agents pick them up automatically:
+One skill file for **every project**, on **every agent surface** (Cursor,
+Claude Code desktop, Claude Code mobile).
+
+## Install
+
+### Cursor (global)
 
 ```bash
 mkdir -p ~/.cursor/skills
-cp -r .cursor/skills/* ~/.cursor/skills/
+cp -r .cursor/skills/finished-product-delivery ~/.cursor/skills/
 ```
 
 Or symlink:
 
 ```bash
-ln -sf "$(pwd)/.cursor/skills/complete-suite-delivery" ~/.cursor/skills/
-ln -sf "$(pwd)/.cursor/skills/end-to-end-wiring" ~/.cursor/skills/
-ln -sf "$(pwd)/.cursor/skills/marketplace-ready-release" ~/.cursor/skills/
+ln -sf "$(pwd)/.cursor/skills/finished-product-delivery" ~/.cursor/skills/
 ```
 
-## Skills
+### Claude Code
 
-| Skill | When to apply |
+Copy the same folder into your Claude Code skills directory, or paste
+`finished-product-delivery/SKILL.md` into a project-level `CLAUDE.md` / skills
+config. The file is self-contained — no other skill files required.
+
+### Project reference
+
+Point agents at the repo copy:
+
+```text
+.cursor/skills/finished-product-delivery/SKILL.md
+```
+
+Project-specific rules live in `AGENTS.md` and `docs/PRINCIPLES.md`.
+
+## What it covers
+
+| Pillar | Enforces |
 |---|---|
-| `complete-suite-delivery` | Planning, scoping, roadmaps — ship the full suite now |
-| `end-to-end-wiring` | Implementation — connect every layer before merge |
-| `marketplace-ready-release` | Pre-release — competitor-grade, description-faithful shipping |
+| Complete suite | Ship full capability now — no withheld essentials |
+| End-to-end wiring | Connect every layer before merge |
+| Marketplace-ready | Public description matches reality |
 
-## The standard in one sentence
+## One-sentence standard
 
-**Ship a complete, honestly described, fully wired product — not a bun with
-a roadmap for the patty.**
-
-Project-specific guidance lives in `AGENTS.md` and `docs/PRINCIPLES.md`.
+**Ship a complete, honestly described, fully wired product — not a bun with a
+roadmap for the patty.**

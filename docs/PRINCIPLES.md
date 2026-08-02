@@ -142,7 +142,8 @@ Rules:
 - Errors propagate with actionable messages at every layer
 - At least one test exercises the same path a user would take
 
-See the global skill `end-to-end-wiring` in `.cursor/skills/`.
+See the global skill `finished-product-delivery` in
+`.cursor/skills/finished-product-delivery/SKILL.md`.
 
 ---
 
@@ -160,8 +161,8 @@ APEX is built to compete on merit in public. That means:
 - Third-party licenses and bundled data provenance are documented
 - Known limitations are stated plainly — never hidden as "coming soon"
 
-Before declaring a release ready, run the checklist in the global skill
-`marketplace-ready-release` (`.cursor/skills/`).
+Before declaring a release ready, run the checklist in
+`finished-product-delivery` (`.cursor/skills/finished-product-delivery/SKILL.md`).
 
 ### The finished-product test
 

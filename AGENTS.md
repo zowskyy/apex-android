@@ -12,17 +12,19 @@ not as a later addition, optional extra, or premium tier.
 Read `docs/PRINCIPLES.md` before planning any work. It governs scope decisions
 and overrides any roadmap sequencing that would defer core capability.
 
-### Global skills (apply to every project)
+### Global skill (apply to every project)
 
-Install and follow the skills in `.cursor/skills/` (see
-`.cursor/skills/README.md`). These are the canonical, version-controlled
-copies; symlink or copy them to `~/.cursor/skills/` for global agent use.
+Install and follow the single skill in
+`.cursor/skills/finished-product-delivery/SKILL.md` (see
+`.cursor/skills/README.md`). This is the canonical, version-controlled copy;
+copy or symlink it to `~/.cursor/skills/` for global Cursor use, or into your
+Claude Code skills directory for desktop/mobile.
 
-| Skill | Purpose |
-|---|---|
-| `complete-suite-delivery` | Ship the full suite now — no withheld essentials |
-| `end-to-end-wiring` | Wire every layer before merge — no orphan modules |
-| `marketplace-ready-release` | Release only what matches the public description |
+**`finished-product-delivery`** — one standard covering:
+
+- **Complete suite** — ship the full capability now, no withheld essentials
+- **End-to-end wiring** — connect every layer before merge, no orphan modules
+- **Marketplace-ready** — public description matches reality; competitor-grade polish
 
 **The finished-product test:** you cannot sell a hamburger with only the bun
 and lettuce. Every advertised workflow must work end to end, across every
