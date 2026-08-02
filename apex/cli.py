@@ -11,6 +11,8 @@ from typing import Any
 from apex.analysis import ApexError, diff_indexes, inspect_apk
 from apex.corpus.stats import corpus_stats
 from apex.device.sync import list_connected, sync_device
+from apex.format_detect import detect_format
+from apex.ios.ipa import is_ipa
 from apex.providers.bootstrap import MANAGED_TOOLS, install_tool, list_tools
 from apex.providers.bundletool import build_apks, extract_apks, inspect_bundle
 from apex.reporting.sarif import security_scan_to_sarif
@@ -32,6 +34,7 @@ from apex.workflows import (
     export_icon,
     framework_check,
     generate_sbom,
+    jni_report,
     privacy_report,
     roundtrip_verify,
     scan_trackers,
@@ -141,6 +144,18 @@ def build_parser() -> argparse.ArgumentParser:
     signing_cmd.add_argument("apk")
     signing_cmd.add_argument("--output", "-o")
 
+    jni_cmd = sub.add_parser(
+        "jni", help="resolve the Dalvik/native JNI cross-reference graph"
+    )
+    jni_cmd.add_argument("apk")
+    jni_cmd.add_argument("--output", "-o")
+
+    detect_cmd = sub.add_parser(
+        "detect", help="identify a file's real format from its content, not its name"
+    )
+    detect_cmd.add_argument("app")
+    detect_cmd.add_argument("--output", "-o")
+
     trackers_cmd = sub.add_parser(
         "trackers", help="detect trackers and third-party libraries (APK or IPA)"
     )
@@ -209,13 +224,13 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "inspect":
             path = Path(args.apk)
-            if path.suffix.lower() == ".ipa":
+            if is_ipa(path):
                 from apex.ios.ipa import inspect_ipa
 
                 _print(inspect_ipa(path), args.output)
             else:
                 _print(inspect_apk(path, include_files=args.files), args.output)
-        elif args.command == "analyze" and Path(args.apk).suffix.lower() == ".ipa":
+        elif args.command == "analyze" and is_ipa(Path(args.apk)):
             report = analyze_ios(Path(args.apk), Path(args.out))
             print(f"JSON report: {Path(args.out) / 'report.json'}")
             print(
@@ -295,6 +310,10 @@ def main(argv: list[str] | None = None) -> int:
             native = analyze_signatures(Path(args.apk))
             native["cross_check"] = cross_check_with_apksigner(Path(args.apk), native)
             _print(format_signing_panel(native), args.output)
+        elif args.command == "jni":
+            _print(jni_report(Path(args.apk)), args.output)
+        elif args.command == "detect":
+            _print(detect_format(Path(args.app)).as_dict(), args.output)
         elif args.command == "trackers":
             _print(scan_trackers(Path(args.app)), args.output)
         elif args.command == "sbom":

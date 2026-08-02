@@ -16,6 +16,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 from apex.corpus.stats import corpus_packages, corpus_stats
 from apex.device.adb import list_packages
 from apex.device.sync import list_connected, sync_device
+from apex.format_detect import detect_format
 from apex.intel.detect import detect_android, summarize_detections
 from apex.intel.privacy_posture import assess_posture
 from apex.providers.registry import get_adb_command
@@ -172,8 +173,14 @@ class ApexWebHandler(BaseHTTPRequestHandler):
         resolved = path.expanduser().resolve()
         if not resolved.is_file():
             raise ApexError(f"application not found: {resolved}")
-        if resolved.suffix.lower() == ".ipa":
+        detected = detect_format(resolved)
+        if detected.format == "ipa":
             return self._analyze_ios(resolved)
+        if detected.format in {"macho", "elf", "unknown"}:
+            raise ApexError(
+                f"unsupported input: detected {detected.format} "
+                f"({', '.join(detected.evidence) or 'no evidence'})"
+            )
         dex = {"classes": [], "methods": [], "edges": [], "errors": []}
         with zipfile.ZipFile(resolved) as archive:
             for name in sorted(

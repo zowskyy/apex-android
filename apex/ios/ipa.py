@@ -160,5 +160,16 @@ def inspect_ipa(ipa_path: Path) -> dict[str, Any]:
 
 
 def is_ipa(path: Path) -> bool:
-    """Return True when the path looks like an iOS application archive."""
-    return posixpath.splitext(str(path).lower())[1] == ".ipa"
+    """Return True when the file *is* an iOS application archive.
+
+    Detection is content-based: a renamed ``.apk`` that is really an IPA is
+    still routed to the iOS engine, and an ``.ipa`` that is really an Android
+    package is not.
+    """
+    from apex.format_detect import detect_format
+
+    path = Path(path)
+    try:
+        return detect_format(path).format == "ipa"
+    except (FileNotFoundError, OSError):
+        return posixpath.splitext(str(path).lower())[1] == ".ipa"

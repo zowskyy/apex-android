@@ -23,6 +23,7 @@ from jinja2 import Template
 
 from apex.intel.detect import detect_android, summarize_detections
 from apex.intel.privacy_posture import assess_posture
+from apex.jni.xref import build_jni_graph
 from apex.permissions.enrich import enrich_declared
 from apex.permissions.linkage import link_permissions_to_dex
 from apex.providers.apkanalyzer import benchmark_apk
@@ -186,6 +187,15 @@ def analyze_apk(
     )
     native = scan_native_libs(extract_dir, keep_abi)
     dex = scan_dex_metadata(extract_dir)
+    jni_graph = build_jni_graph(dex, native, extract_dir)
+    collector.add(
+        ProvenanceRecord(
+            operation="native.jni_xref",
+            provider="apex-native",
+            provider_version=None,
+            status="ok",
+        )
+    )
     crossrefs = build_crossrefs(dex)
     reachability = build_reachability(dex, resources, native)
     bundle = export_minimal_bundle(extract_dir, out_dir, keep_abi)
@@ -255,7 +265,7 @@ def analyze_apk(
             "permissions_enriched": permissions_enriched,
             "permission_links": permission_links,
         },
-        "native": native,
+        "native": {**native, "jni": jni_graph},
         "dex": dex,
         "crossrefs": crossrefs,
         "reachability": reachability,
@@ -377,6 +387,20 @@ def scan_trackers(path: Path) -> dict[str, Any]:
     summary["platform"] = platform
     summary["path"] = str(path)
     return summary
+
+
+def jni_report(apk_path: Path, work_dir: Path | None = None) -> dict[str, Any]:
+    """Resolve the Dalvik/native JNI cross-reference graph for an APK."""
+    import tempfile
+
+    apk_path = Path(apk_path)
+    root = Path(work_dir) if work_dir else Path(tempfile.mkdtemp(prefix="apex-jni-"))
+    extract_dir, _ = extract_apk(apk_path, root)
+    dex = scan_dex_metadata(extract_dir)
+    native = scan_native_libs(extract_dir)
+    graph = build_jni_graph(dex, native, extract_dir)
+    graph["apk"] = str(apk_path)
+    return graph
 
 
 def privacy_report(path: Path) -> dict[str, Any]:

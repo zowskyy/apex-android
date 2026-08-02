@@ -426,6 +426,22 @@ def scan_dex_metadata(extract_dir: Path) -> dict[str, Any]:
             result["classes"].append(
                 {"dex": dex_path.name, "name": dex_path.stem, "parse_error": str(exc)}
             )
+
+    from apex.dex.unified import resolve_cross_dex
+
+    unified = resolve_cross_dex(result)
+    result["edges"] = unified["edges"]
+    result["cross_dex"] = {
+        key: unified[key]
+        for key in (
+            "symbol_count",
+            "edge_count",
+            "cross_dex_edges",
+            "unresolved_edges",
+            "duplicate_classes",
+            "dex_files",
+        )
+    }
     return result
 
 
@@ -444,10 +460,25 @@ def build_crossrefs(dex_index: dict[str, Any]) -> dict[str, Any]:
     for edge in dex_index.get("edges", []):
         source = f"{edge.get('caller_class')}::{edge.get('caller_method')}"
         target = str(edge.get("callee", ""))
-        if source and target:
-            nodes.setdefault(source, {"id": source, "kind": "method"})
-            nodes.setdefault(target, {"id": target, "kind": "method"})
-            edges.append({"src": source, "dst": target, "kind": "calls"})
+        if not source or not target:
+            continue
+        # An edge whose callee is not defined in this package points outside it
+        # (framework or runtime). Record it as external rather than inventing a
+        # node that looks like an in-package definition.
+        resolved = bool(edge.get("resolved", True))
+        nodes.setdefault(source, {"id": source, "kind": "method"})
+        nodes.setdefault(
+            target, {"id": target, "kind": "method" if resolved else "external"}
+        )
+        edges.append(
+            {
+                "src": source,
+                "dst": target,
+                "kind": "calls",
+                "resolved": resolved,
+                "cross_dex": bool(edge.get("cross_dex", False)),
+            }
+        )
     return {"nodes": sorted(nodes.values(), key=lambda item: item["id"]), "edges": edges}
 
 
@@ -583,8 +614,12 @@ def inspect_apk(apk_path: Path, include_files: bool = False) -> dict[str, Any]:
             for name in names
             if Path(name).name.startswith("classes") and name.endswith(".dex")
         )
+    from apex.format_detect import detect_format
+
+    detected = detect_format(apk_path)
     result = {
-        "format": apk_path.suffix.lower().lstrip(".") or "zip",
+        "format": detected.format,
+        "format_detection": detected.as_dict(),
         "path": str(apk_path),
         "sha256": sha256_file(apk_path),
         "size_bytes": apk_path.stat().st_size,
