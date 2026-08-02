@@ -436,6 +436,37 @@ def test_and04_wired_into_analysis_report(tmp_path: Path):
     assert standalone["apk"].endswith("jni_native.apk")
 
 
+def test_and04_end_to_end_from_a_real_apk():
+    """Step 1 end to end: real DEX `native` declarations -> real .so exports.
+
+    The DEX is assembled by `scripts/generate_exception_dex.py` (accepted by
+    both Androguard and APEX's own parser) and the library is compiled by a C
+    compiler, so nothing about this path is mocked.
+    """
+    from apex.workflows import jni_report
+
+    _ensure_jni_fixture()
+    apk = Path("tests/fixtures/jni_resolvable.apk")
+    if not apk.is_file():
+        subprocess.run([sys.executable, "scripts/generate_jni_fixture.py", "--clean"], check=True)
+
+    graph = jni_report(apk)
+    assert graph["native_method_count"] == 2
+    assert graph["resolved_count"] == 2
+    assert graph["unresolved_count"] == 0
+    resolved = {edge["java"]: edge["symbol"] for edge in graph["edges"]}
+    assert (
+        resolved["com.apex.testapp.MainActivity::nativeInit()V"]
+        == "Java_com_apex_testapp_MainActivity_nativeInit"
+    )
+    # The `_1` escape for an underscore in the Java method name.
+    assert (
+        resolved["com.apex.testapp.MainActivity::native_under()V"]
+        == "Java_com_apex_testapp_MainActivity_native_1under"
+    )
+    assert graph["libraries"][0]["symbol_count"] >= 4
+
+
 def test_and04_elf_symbol_struct_shapes():
     """32-bit and big-endian headers are accepted by the class/data checks."""
     for ei_class, ei_data in ((1, 1), (2, 1), (1, 2), (2, 2)):

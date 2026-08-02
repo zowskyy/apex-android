@@ -21,6 +21,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = ROOT / "tests" / "fixtures"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 REAL_DEX = ROOT / "core" / "dex_parser" / "tests" / "fixtures" / "classes.dex"
 
 # Exports both JNI spellings: the short form and an overload-qualified long
@@ -75,19 +76,38 @@ def build_apk(so_path: Path, apk_path: Path) -> Path:
     return apk_path
 
 
+def build_resolvable_apk(so_path: Path, apk_path: Path) -> Path:
+    """APK whose DEX declares `native` methods matching the library exports.
+
+    Uses the assembled DEX from ``generate_exception_dex.py``, which contains a
+    ``com.apex.testapp.MainActivity`` class with real ``native`` method
+    declarations, so JNI resolution can be verified end to end.
+    """
+    from generate_exception_dex import build_dex
+
+    apk_path.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(apk_path, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("AndroidManifest.xml", b"<manifest/>")
+        archive.writestr("classes.dex", build_dex())
+        archive.write(so_path, "lib/arm64-v8a/libapexjni.so")
+    return apk_path
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--clean", action="store_true", help="rebuild even if present")
     args = parser.parse_args()
 
     apk = FIXTURES / "jni_native.apk"
+    resolvable = FIXTURES / "jni_resolvable.apk"
     so = FIXTURES / "libapexjni.so"
-    if apk.is_file() and so.is_file() and not args.clean:
+    if apk.is_file() and so.is_file() and resolvable.is_file() and not args.clean:
         print(f"fixture already present: {apk}")
         return 0
     build_shared_object(so)
     build_apk(so, apk)
-    print(f"Wrote {so} and {apk}")
+    build_resolvable_apk(so, resolvable)
+    print(f"Wrote {so}, {apk} and {resolvable}")
     return 0
 
 
