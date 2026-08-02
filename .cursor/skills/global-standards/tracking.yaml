@@ -1,0 +1,42 @@
+# Machine-readable tracking for global-standards skill creation.
+# Updated on every state change per global-standards mandate #2.
+
+task: create-global-standards-skill
+created_at: "2026-08-02T05:24:00Z"
+updated_at: "2026-08-02T05:30:00Z"
+
+items:
+  - id: skill-file
+    description: Create SKILL.md with correct frontmatter and full standards body
+    status: completed
+    owner: builder-agent
+    validator: validator-agent-bc-17ac2e1f
+    evidence: "SKILL.md lines 1-189; yaml.safe_load passes; all 8 sections present"
+
+  - id: no-paths-scope
+    description: Omit paths field so skill applies to all files and tasks
+    status: completed
+    owner: builder-agent
+    validator: validator-agent-bc-17ac2e1f
+    evidence: "frontmatter keys are only name and description"
+
+  - id: auto-invocation
+    description: Omit disable-model-invocation so agent auto-applies on relevant tasks
+    status: completed
+    owner: builder-agent
+    validator: validator-agent-bc-17ac2e1f
+    evidence: "disable-model-invocation absent from frontmatter"
+
+  - id: folder-name-match
+    description: Folder name global-standards matches frontmatter name field
+    status: completed
+    owner: builder-agent
+    validator: validator-agent-bc-17ac2e1f
+    evidence: "folder global-standards == name global-standards"
+
+  - id: separate-validation
+    description: Separate agent validates structure and content completeness
+    status: completed
+    owner: validator-agent
+    validator: validator-agent-bc-17ac2e1f
+    evidence: "6/6 checks PASS per validator report"
