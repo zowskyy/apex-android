@@ -4,16 +4,16 @@ The native Rust ZIP reader remains the preferred extraction backend.  The
 higher-level Android parsers use Androguard, which gives APEX production-grade
 AXML/ARSC/DEX handling while the native parsers continue to mature.
 """
+
 from __future__ import annotations
 
 import hashlib
 import json
 import shutil
-import tempfile
 import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 try:
     from loguru import logger
@@ -191,7 +191,9 @@ def _manifest_summary(raw: bytes) -> dict[str, Any]:
     application = root.find("application")
     if application is None:
         return result
-    result["debuggable"] = application.attrib.get(f"{ANDROID_NS}debuggable", "false").lower() == "true"
+    result["debuggable"] = (
+        application.attrib.get(f"{ANDROID_NS}debuggable", "false").lower() == "true"
+    )
 
     component_map = {
         "activity": "activities",
@@ -212,8 +214,7 @@ def _manifest_summary(raw: bytes) -> dict[str, Any]:
                 result[key].append(name)
             for intent in node.findall("intent-filter"):
                 actions = {
-                    action.attrib.get(f"{ANDROID_NS}name")
-                    for action in intent.findall("action")
+                    action.attrib.get(f"{ANDROID_NS}name") for action in intent.findall("action")
                 }
                 categories = {
                     category.attrib.get(f"{ANDROID_NS}name")
@@ -273,9 +274,13 @@ def scan_resources(extract_dir: Path) -> dict[str, Any]:
         "manifest_present": manifest.is_file(),
         "resources_arsc_present": resources.is_file(),
         "manifest": _manifest_summary(manifest.read_bytes()) if manifest.is_file() else {},
-        "resource_table": resource_table_info(resources.read_bytes()) if resources.is_file() else {},
+        "resource_table": resource_table_info(resources.read_bytes())
+        if resources.is_file()
+        else {},
         "res_files": inventory_files(extract_dir / "res") if (extract_dir / "res").is_dir() else [],
-        "asset_files": inventory_files(extract_dir / "assets") if (extract_dir / "assets").is_dir() else [],
+        "asset_files": inventory_files(extract_dir / "assets")
+        if (extract_dir / "assets").is_dir()
+        else [],
     }
     # Compatibility with the original report schema.
     result["manifest_xml"] = result["manifest"]
@@ -523,15 +528,9 @@ def inspect_apk(apk_path: Path, include_files: bool = False) -> dict[str, Any]:
             ),
             "",
         )
-        manifest = (
-            _manifest_summary(archive.read(manifest_name))
-            if manifest_name
-            else {}
-        )
+        manifest = _manifest_summary(archive.read(manifest_name)) if manifest_name else {}
         resource_table = (
-            resource_table_info(archive.read("resources.arsc"))
-            if "resources.arsc" in names
-            else {}
+            resource_table_info(archive.read("resources.arsc")) if "resources.arsc" in names else {}
         )
         dex_files = sorted(
             name
@@ -614,9 +613,7 @@ def diff_indexes(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
         "classes_removed": sorted(left_classes - right_classes),
         "methods_added": sorted(right_methods - left_methods),
         "methods_removed": sorted(left_methods - right_methods),
-        "dex_files_added": sorted(
-            set(right.get("dex_files", [])) - set(left.get("dex_files", []))
-        ),
+        "dex_files_added": sorted(set(right.get("dex_files", [])) - set(left.get("dex_files", []))),
         "dex_files_removed": sorted(
             set(left.get("dex_files", [])) - set(right.get("dex_files", []))
         ),

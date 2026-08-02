@@ -4,9 +4,9 @@ Every operation is available as a Python function and a CLI command.  External
 Android tools are optional: APEX performs safe, lossless raw decode/build on
 its own and uses apktool/apksigner when the caller explicitly selects them.
 """
+
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import re
@@ -14,7 +14,6 @@ import shutil
 import sqlite3
 import struct
 import subprocess
-import tempfile
 import time
 import zipfile
 from pathlib import Path
@@ -54,7 +53,9 @@ class Store:
 class SQLiteStore(Store):
     def __init__(self, path: Path):
         self.conn = sqlite3.connect(path)
-        self.conn.execute("CREATE TABLE IF NOT EXISTS kv (name TEXT PRIMARY KEY, json TEXT NOT NULL)")
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS kv (name TEXT PRIMARY KEY, json TEXT NOT NULL)"
+        )
         self.conn.commit()
 
     def put(self, name: str, data: dict[str, Any]) -> None:
@@ -73,7 +74,9 @@ class PostgresStore(Store):
             raise ApexError("PostgreSQL storage requires 'psycopg'") from exc
         self.conn = psycopg.connect(dsn)
         with self.conn.cursor() as cursor:
-            cursor.execute("CREATE TABLE IF NOT EXISTS kv (name TEXT PRIMARY KEY, json JSONB NOT NULL)")
+            cursor.execute(
+                "CREATE TABLE IF NOT EXISTS kv (name TEXT PRIMARY KEY, json JSONB NOT NULL)"
+            )
         self.conn.commit()
 
     def put(self, name: str, data: dict[str, Any]) -> None:
@@ -164,7 +167,9 @@ def analyze_apk(
                 "extracted": zip_security.get("extracted"),
                 "warned": zip_security.get("warned", 0),
                 "warnings": [
-                    item for item in zip_security.get("entries", []) if item.get("verdict") == "WARN"
+                    item
+                    for item in zip_security.get("entries", [])
+                    if item.get("verdict") == "WARN"
                 ],
             }
         },
@@ -202,7 +207,9 @@ def _method_smali(method: Any) -> str:
         return "\n".join(lines) + "\n"
     offset = 0
     for instruction in method.get_instructions():
-        lines.append(f"    {offset:04x}: {instruction.get_name()} {instruction.get_output()}".rstrip())
+        lines.append(
+            f"    {offset:04x}: {instruction.get_name()} {instruction.get_output()}".rstrip()
+        )
         offset += instruction.get_length()
     lines.append(".end method")
     return "\n".join(lines) + "\n"
@@ -238,9 +245,7 @@ def decompile_apk(
 
     with zipfile.ZipFile(apk_path) as archive:
         dex_names = sorted(
-            name
-            for name in archive.namelist()
-            if re.fullmatch(r"(?:.*/)?classes\d*\.dex", name)
+            name for name in archive.namelist() if re.fullmatch(r"(?:.*/)?classes\d*\.dex", name)
         )
         for dex_name in dex_names:
             try:
@@ -535,7 +540,12 @@ def _iter_arsc_strings(data: bytes) -> Iterator[tuple[int, str]]:
             chunk_type, header_size, size = struct.unpack_from("<HHI", data, offset)
         except struct.error:
             return
-        if chunk_type != 0x0001 or header_size < 28 or size < header_size or offset + size > len(data):
+        if (
+            chunk_type != 0x0001
+            or header_size < 28
+            or size < header_size
+            or offset + size > len(data)
+        ):
             offset += 4
             continue
         try:
@@ -656,7 +666,9 @@ def security_scan(apk_path: Path) -> dict[str, Any]:
                     application = root.find("application")
                     if application is not None:
                         if (
-                            application.attrib.get(f"{ANDROID_NS}usesCleartextTraffic", "false").lower()
+                            application.attrib.get(
+                                f"{ANDROID_NS}usesCleartextTraffic", "false"
+                            ).lower()
                             == "true"
                         ):
                             findings.append(
@@ -667,7 +679,10 @@ def security_scan(apk_path: Path) -> dict[str, Any]:
                                     "message": "cleartext network traffic is permitted",
                                 }
                             )
-                        if application.attrib.get(f"{ANDROID_NS}allowBackup", "true").lower() == "true":
+                        if (
+                            application.attrib.get(f"{ANDROID_NS}allowBackup", "true").lower()
+                            == "true"
+                        ):
                             findings.append(
                                 {
                                     "severity": "low",
@@ -720,9 +735,7 @@ def diff_apks(left: Path, right: Path) -> dict[str, Any]:
     right_dex = {"dex_files": [], "classes": [], "methods": []}
     with zipfile.ZipFile(left) as archive:
         for name in sorted(
-            item
-            for item in archive.namelist()
-            if re.fullmatch(r"(?:.*/)?classes\d*\.dex", item)
+            item for item in archive.namelist() if re.fullmatch(r"(?:.*/)?classes\d*\.dex", item)
         ):
             left_dex["dex_files"].append(name)
             try:
@@ -733,9 +746,7 @@ def diff_apks(left: Path, right: Path) -> dict[str, Any]:
                 pass
     with zipfile.ZipFile(right) as archive:
         for name in sorted(
-            item
-            for item in archive.namelist()
-            if re.fullmatch(r"(?:.*/)?classes\d*\.dex", item)
+            item for item in archive.namelist() if re.fullmatch(r"(?:.*/)?classes\d*\.dex", item)
         ):
             right_dex["dex_files"].append(name)
             try:

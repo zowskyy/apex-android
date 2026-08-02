@@ -1,4 +1,5 @@
 """Dependency-free local web interface for APEX."""
+
 from __future__ import annotations
 
 import json
@@ -14,7 +15,6 @@ from urllib.parse import parse_qs, urlparse
 
 from .analysis import ApexError, dex_metadata, inspect_apk, sanitized_zip_name
 from .workflows import decompile_apk, doctor, security_scan
-
 
 WEB_APP = r"""<!doctype html>
 <html lang="en"><head>

@@ -1,4 +1,5 @@
 """Command-line interface for APEX."""
+
 from __future__ import annotations
 
 import argparse
@@ -84,7 +85,9 @@ def build_parser() -> argparse.ArgumentParser:
     roundtrip_cmd.add_argument("--work", default="apex_roundtrip")
     roundtrip_cmd.add_argument("--output", "-o")
 
-    security_cmd = sub.add_parser("security-scan", help="scan archive and manifest security signals")
+    security_cmd = sub.add_parser(
+        "security-scan", help="scan archive and manifest security signals"
+    )
     security_cmd.add_argument("apk")
     security_cmd.add_argument("--output", "-o")
 
@@ -114,8 +117,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "inspect":
             _print(inspect_apk(Path(args.apk), include_files=args.files), args.output)
         elif args.command == "analyze":
-            store = SQLiteStore(Path(args.db)) if args.db else (
-                PostgresStore(args.pg) if args.pg else None
+            store = (
+                SQLiteStore(Path(args.db))
+                if args.db
+                else (PostgresStore(args.pg) if args.pg else None)
             )
             abi = [item for item in args.abi.split(",") if item] or None
             report = analyze_apk(Path(args.apk), Path(args.out), abi, store)
@@ -184,4 +189,3 @@ def main(argv: list[str] | None = None) -> int:
     except (ApexError, OSError, ValueError, json.JSONDecodeError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
-

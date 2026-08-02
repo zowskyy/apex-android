@@ -21,7 +21,6 @@ from apex.workflows import (
     verify_apk,
 )
 
-
 ROOT = Path(__file__).resolve().parent.parent
 REAL_DEX = ROOT / "core" / "dex_parser" / "tests" / "fixtures" / "classes.dex"
 MANIFEST = b"""<?xml version="1.0" encoding="utf-8"?>
