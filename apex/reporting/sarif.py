@@ -85,7 +85,12 @@ def security_scan_to_sarif(scan: dict[str, Any]) -> dict[str, Any]:
     findings = scan.get("findings", [])
     categories = sorted({item.get("category", "unknown") for item in findings})
     rules = [_rule_for(category) for category in categories]
-    artifact_uri = Path(scan.get("apk", "unknown.apk")).as_uri() if scan.get("apk") else None
+    artifact_uri = None
+    if scan.get("apk"):
+        try:
+            artifact_uri = Path(scan["apk"]).resolve().as_uri()
+        except (ValueError, OSError):
+            artifact_uri = None
 
     results: list[dict[str, Any]] = []
     for finding in findings:

@@ -16,13 +16,15 @@ from urllib.parse import parse_qs, unquote, urlparse
 from apex.corpus.stats import corpus_packages, corpus_stats
 from apex.device.adb import list_packages
 from apex.device.sync import list_connected, sync_device
+from apex.intel.detect import detect_android, summarize_detections
+from apex.intel.privacy_posture import assess_posture
 from apex.providers.registry import get_adb_command
 from apex.signing.display import format_signing_panel
 from apex.signing.native import analyze_signatures, cross_check_with_apksigner
 from apex.version import __version__
 
 from .analysis import ApexError, dex_metadata, inspect_apk, sanitized_zip_name
-from .workflows import decompile_apk, doctor, security_scan
+from .workflows import decompile_apk, doctor, generate_sbom, security_scan
 
 WEB_APP = r"""<!doctype html>
 <html lang="en"><head>
@@ -66,13 +68,13 @@ code{color:#b7f5ff;word-break:break-all}.ok{color:var(--green)}.bad{color:var(--
 </div>
 <div id="viewAnalyze">
 <section class="hero"><div><h1>Understand any APK.<br><span class="gradient">Before it understands you.</span></h1><p class="lead">Inspect manifests, permissions, resources, DEX classes, native libraries, and static security signals from one private local workspace.</p></div>
-<div><div id="drop" class="drop"><div><strong>Drop an APK here</strong><p>Files stay on this machine.</p><label class="button" for="file">Choose APK</label><input id="file" type="file" accept=".apk,.zip"></div></div><div class="pathbar"><input id="path" placeholder="/path/to/application.apk"><button id="pathGo" class="secondary">Open path</button></div></div></section>
+<div><div id="drop" class="drop"><div><strong>Drop an APK or IPA here</strong><p>Android and iOS · files stay on this machine.</p><label class="button" for="file">Choose file</label><input id="file" type="file" accept=".apk,.zip,.ipa"></div></div><div class="pathbar"><input id="path" placeholder="/path/to/application.apk or .ipa"><button id="pathGo" class="secondary">Open path</button></div></div></section>
 <section id="busy" class="panel hidden"><div class="loader"></div><p style="text-align:center;color:var(--muted)">Analyzing package structure and security signals…</p></section>
 <section id="results" class="hidden">
-<div style="display:flex;align-items:center;gap:12px"><div><h2 id="filename" style="font-size:22px;margin:0"></h2><div id="hash" class="tag"></div></div><div class="spacer"></div><button id="decompile" class="secondary">Decompile Java</button></div>
-<div class="grid"><div class="metric"><div id="entries" class="n">0</div><div class="l">ARCHIVE ENTRIES</div></div><div class="metric"><div id="dex" class="n">0</div><div class="l">DEX CLASSES</div></div><div class="metric"><div id="perms" class="n">0</div><div class="l">PERMISSIONS</div></div><div class="metric"><div id="risk" class="n">—</div><div class="l">SECURITY VERDICT</div></div></div>
-<div class="columns"><div class="panel"><h2>Application identity</h2><div id="identity"></div></div><div class="panel"><h2>Entry points</h2><div id="components"></div></div><div class="panel"><h2>Permissions</h2><div id="permissions"></div></div><div class="panel"><h2>Security findings</h2><div id="findings"></div></div></div>
-<div class="panel" style="margin-top:14px"><h2>Signing & certificates</h2><div id="signing"></div></div>
+<div style="display:flex;align-items:center;gap:12px"><div><h2 id="filename" style="font-size:22px;margin:0"></h2><div id="hash" class="tag"></div></div><span id="platformBadge" class="pill"></span><div class="spacer"></div><button id="sbom" class="secondary">Download SBOM</button><button id="decompile" class="secondary">Decompile Java</button></div>
+<div class="grid"><div class="metric"><div id="entries" class="n">0</div><div class="l">ARCHIVE ENTRIES</div></div><div class="metric"><div id="dex" class="n">0</div><div class="l">DEX CLASSES</div></div><div class="metric"><div id="perms" class="n">0</div><div class="l">PERMISSIONS</div></div><div class="metric"><div id="trackers" class="n">0</div><div class="l">TRACKERS</div></div><div class="metric"><div id="posture" class="n">—</div><div class="l">PRIVACY GRADE</div></div><div class="metric"><div id="risk" class="n">—</div><div class="l">SECURITY VERDICT</div></div></div>
+<div class="columns"><div class="panel"><h2>Application identity</h2><div id="identity"></div></div><div class="panel"><h2 id="componentsTitle">Entry points</h2><div id="components"></div></div><div class="panel"><h2>Trackers &amp; libraries</h2><div id="intel"></div></div><div class="panel"><h2>Privacy posture</h2><div id="posturePanel"></div></div><div class="panel"><h2 id="permsTitle">Permissions</h2><div id="permissions"></div></div><div class="panel"><h2>Security findings</h2><div id="findings"></div></div></div>
+<div class="panel" style="margin-top:14px" id="signingCard"><h2>Signing &amp; certificates</h2><div id="signing"></div></div>
 <div class="panel" style="margin-top:14px"><h2>Native architectures & resource table</h2><div id="technical"></div></div>
 <div class="panel" style="margin-top:14px"><h2>Class & method explorer</h2><div class="pathbar"><input id="classSearch" placeholder="Search classes and methods"><button id="classGo" class="secondary">Search</button></div><div id="classList" style="margin-top:12px;max-height:430px;overflow:auto"></div></div>
 </section></div></main><footer>APEX runs locally · Static analysis is not a malware verdict</footer>
@@ -83,12 +85,34 @@ function busy(v){$("busy").classList.toggle("hidden",!v);if(v)$("results").class
 function kv(k,v){return `<div class="kv"><span>${esc(k)}</span><span>${esc(v||"—")}</span></div>`}
 function pills(items){return items?.length?items.map(x=>`<span class="pill">${esc(x)}</span>`).join(""):'<span class="empty">None detected</span>'}
 function renderClasses(query=""){const d=currentData?.dex||{},q=query.toLowerCase(),methods=d.methods||[],classes=(d.classes||[]).filter(c=>!q||c.name.toLowerCase().includes(q)||methods.some(m=>m.class===c.name&&(m.name+m.descriptor).toLowerCase().includes(q)));$("classList").innerHTML=classes.slice(0,300).map(c=>{const classMatches=!q||c.name.toLowerCase().includes(q),ms=methods.filter(m=>m.class===c.name&&(classMatches||(m.name+m.descriptor).toLowerCase().includes(q)));return `<details><summary><code>${esc(c.name)}</code> <span class="tag">${esc(c.access||"")}</span></summary>${ms.map(m=>`<div class="kv"><span>${esc(m.access)}</span><code>${esc(m.name+m.descriptor)}</code></div>`).join("")||'<div class="empty">No matching methods</div>'}</details>`}).join("")||'<span class="empty">No matching DEX classes.</span>'}
-function render(data){const i=data.inspect,s=data.security,m=i.manifest||{};currentPath=data.path;currentData=data;$("results").classList.remove("hidden");
+function renderIntel(intel){const t=intel?.trackers||[],l=intel?.libraries||[];if(!t.length&&!l.length){$("intel").innerHTML='<span class="empty">No trackers or known libraries detected.</span>';return}
+const row=d=>`<div class="finding ${d.kind==="tracker"?"":"low"}"><strong>${esc(d.name)}</strong> <span class="tag">${esc(d.kind)}</span> ${(d.categories||[]).map(c=>`<span class="pill">${esc(c)}</span>`).join("")}<br><small class="mono">${esc((d.evidence||[]).slice(0,3).join(", "))}</small></div>`;
+$("intel").innerHTML=(t.length?`<p class="tag">${t.length} tracker SDK(s)</p>`+t.map(row).join(""):"")+(l.length?`<p class="tag">${l.length} librar${l.length===1?"y":"ies"}</p>`+l.map(row).join(""):"")}
+function renderPosture(p){if(!p){$("posturePanel").innerHTML='<span class="empty">No posture data.</span>';return}
+const cats=Object.entries(p.signals?.tracker_categories||{}).map(([k,v])=>`<span class="pill">${esc(k)}: ${v}</span>`).join("")||'<span class="empty">none</span>';
+const disc=(p.discrepancies||[]).length?p.discrepancies.map(d=>`<div class="finding ${d.severity==="low"?"low":""}"><strong>${esc(d.severity)}</strong> · ${esc(d.message)}</div>`).join(""):'<span class="empty">No declared-vs-actual discrepancies.</span>';
+$("posturePanel").innerHTML=kv("Grade",`${esc(p.grade)} (${esc(p.score)}/100)`)+kv("Trackers",p.signals?.tracker_count??0)+`<div class="kv"><span>Categories</span><span>${cats}</span></div>`+kv("High-risk perms",p.signals?.dangerous_permission_count??0)+kv("Cleartext traffic",p.signals?.cleartext_traffic?"permitted":"no")+`<div style="margin-top:10px">${disc}</div><p class="tag">${esc(p.disclaimer||"")}</p>`}
+function render(data){currentPath=data.path;currentData=data;$("results").classList.remove("hidden");
+$("platformBadge").textContent=(data.platform||"android").toUpperCase();
+$("trackers").textContent=(data.intelligence?.tracker_count)??0;$("posture").textContent=data.privacy_posture?.grade||"—";
+renderIntel(data.intelligence);renderPosture(data.privacy_posture);
+if(data.platform==="ios"){return renderIos(data)}
+const i=data.inspect,s=data.security,m=i.manifest||{};
+$("signingCard").classList.remove("hidden");$("decompile").classList.remove("hidden");$("permsTitle").textContent="Permissions";$("componentsTitle").textContent="Entry points";
 $("filename").textContent=i.path.split(/[\\/]/).pop();$("hash").textContent=i.sha256;$("entries").textContent=i.entry_count;$("dex").textContent=(data.dex?.classes||[]).length;$("perms").textContent=(m.permissions||[]).length;$("risk").textContent=s.verdict;
 $("identity").innerHTML=kv("Package",m.package)+kv("Version",`${m.version_name||"?"} (${m.version_code||"?"})`)+kv("SDK",`min ${m.min_sdk||"?"} · target ${m.target_sdk||"?"}`)+kv("Main activity",m.main_activity);
 $("components").innerHTML=pills([...(m.activities||[]),...(m.services||[]),...(m.receivers||[]),...(m.providers||[])]);
-$("permissions").innerHTML=pills(m.permissions||[]);$("findings").innerHTML=s.findings.length?s.findings.map(f=>`<div class="finding ${esc(f.severity)}"><strong>${esc(f.category)}</strong> · ${esc(f.message)}<br><small>${esc(f.evidence||"")}</small></div>`).join(""):'<span class="empty">No static security findings.</span>';
+$("permissions").innerHTML=pills(m.permissions||[]);$("findings").innerHTML=s.findings.length?s.findings.map(f=>`<div class="finding ${esc(f.severity)}"><strong>${esc(f.category)}</strong> · ${esc(f.message)}<br><small>${esc(f.evidence||"")} ${f.masvs?`· ${esc(f.masvs)}`:""}</small></div>`).join(""):'<span class="empty">No static security findings.</span>';
 $("technical").innerHTML=kv("Format",(i.format||"apk").toUpperCase())+kv("DEX files",(i.dex_files||[]).join(", ")||"none")+kv("Native ABIs",(i.native_abis||[]).join(", ")||"none")+kv("Resource packages",(i.resource_table?.packages||[]).join(", ")||"none")+kv("Locales",(i.resource_table?.locales||[]).join(", ")||"none");renderSigning(data.signing);renderClasses()}
+function renderIos(data){const r=data.ios||{},a=r.app||{},b=r.binary||{},s=data.security;
+$("signingCard").classList.add("hidden");$("decompile").classList.add("hidden");$("permsTitle").textContent="Embedded frameworks";$("componentsTitle").textContent="Privacy manifest";
+$("filename").textContent=(r.path||"").split(/[\\/]/).pop();$("hash").textContent=r.sha256||"";$("entries").textContent=(r.frameworks||[]).length;$("dex").textContent=(b.dylibs||[]).length;$("perms").textContent=(r.frameworks||[]).length;$("risk").textContent=s.verdict;
+$("identity").innerHTML=kv("Bundle ID",a.bundle_id)+kv("Name",a.name)+kv("Version",`${a.version||"?"} (${a.build||"?"})`)+kv("Min iOS",a.minimum_os)+kv("Executable",a.executable);
+const pm=r.privacy_manifest||{};$("components").innerHTML=pm.present?kv("Tracking",pm.tracking?"declared":"not declared")+kv("Tracking domains",(pm.tracking_domains||[]).join(", ")||"none")+kv("Collected data",(pm.collected_data_types||[]).join(", ")||"none"):'<span class="empty">No PrivacyInfo.xcprivacy present.</span>';
+$("permissions").innerHTML=pills(r.frameworks||[]);
+$("findings").innerHTML=s.findings.length?s.findings.map(f=>`<div class="finding ${esc(f.severity)}"><strong>${esc(f.category)}</strong> · ${esc(f.message)}<br><small>${esc(f.evidence||"")} ${f.masvs?`· ${esc(f.masvs)}`:""}</small></div>`).join(""):'<span class="empty">No static security findings.</span>';
+$("technical").innerHTML=kv("Architectures",(b.architectures||[]).map(x=>x.arch).join(", ")||"none")+kv("PIE / ASLR",b.pie?"yes":"no")+kv("Stack canary",b.has_stack_canary?"yes":"no")+kv("ARC",b.has_arc?"yes":"no")+kv("Encrypted",b.encrypted?"yes (FairPlay)":"no")+kv("Code signature",b.has_code_signature?"present":"absent")+kv("Linked dylibs",(b.dylibs||[]).length);
+$("classList").innerHTML=(b.dylibs||[]).map(x=>`<div class="kv"><span></span><code>${esc(x)}</code></div>`).join("")||'<span class="empty">No linked libraries.</span>'}
 function renderSigning(sg){if(!sg){$("signing").innerHTML='<span class="empty">No signing data.</span>';return}
 const sch=Object.entries(sg.schemes||{}).map(([k,v])=>`<span class="pill">${esc(k)} ${v?'<span class="ok">✓</span>':'<span class="bad">✗</span>'}</span>`).join("");
 const cc=sg.cross_check||{};const ccText=cc.status==="match"?'<span class="ok">apksigner agrees</span>':cc.status==="mismatch"?`<span class="bad">apksigner differs: ${esc((cc.differences||[]).join("; "))}</span>`:'<span class="tag">apksigner cross-check not available (native result shown)</span>';
@@ -113,6 +137,7 @@ $("file").onchange=e=>upload(e.target.files[0]);$("pathGo").onclick=()=>pathAnal
 $("classGo").onclick=()=>renderClasses($("classSearch").value);$("classSearch").oninput=e=>renderClasses(e.target.value);
 const drop=$("drop");["dragenter","dragover"].forEach(n=>drop.addEventListener(n,e=>{e.preventDefault();drop.classList.add("drag")}));["dragleave","drop"].forEach(n=>drop.addEventListener(n,e=>{e.preventDefault();drop.classList.remove("drag")}));drop.addEventListener("drop",e=>upload(e.dataTransfer.files[0]));
 $("decompile").onclick=async()=>{if(!currentPath)return;const r=await fetch("/api/decompile",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({path:currentPath})});const d=await r.json();alert(r.ok?`Decompiled ${d.class_count} classes to ${d.output}`:d.error)};
+$("sbom").onclick=async()=>{if(!currentPath)return;const r=await fetch("/api/sbom",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({path:currentPath})});const d=await r.json();if(!r.ok)return alert(d.error||"SBOM failed");const blob=new Blob([JSON.stringify(d,null,2)],{type:"application/json"});const u=URL.createObjectURL(blob);const a=document.createElement("a");a.href=u;a.download="apex-sbom.cdx.json";a.click();URL.revokeObjectURL(u)};
 fetch("/api/health").then(r=>r.json()).then(d=>$("health").textContent=d.ready?"● Engine ready":"● Setup required").catch(()=>$("health").textContent="● Engine unavailable");
 </script></body></html>"""
 
@@ -144,7 +169,9 @@ class ApexWebHandler(BaseHTTPRequestHandler):
     def _analyze_path(self, path: Path) -> dict:
         resolved = path.expanduser().resolve()
         if not resolved.is_file():
-            raise ApexError(f"APK not found: {resolved}")
+            raise ApexError(f"application not found: {resolved}")
+        if resolved.suffix.lower() == ".ipa":
+            return self._analyze_ios(resolved)
         dex = {"classes": [], "methods": [], "edges": [], "errors": []}
         with zipfile.ZipFile(resolved) as archive:
             for name in sorted(
@@ -160,12 +187,50 @@ class ApexWebHandler(BaseHTTPRequestHandler):
                     dex["errors"].append({"dex": name, "error": str(exc)})
         native = analyze_signatures(resolved)
         native["cross_check"] = cross_check_with_apksigner(resolved, native)
+        info = inspect_apk(resolved)
+        manifest = info.get("manifest", {})
+        detections = detect_android(
+            [cls.get("name", "") for cls in dex["classes"] if cls.get("name")]
+        )
+        posture = assess_posture(
+            platform="android",
+            permissions=manifest.get("permissions", []),
+            detections=detections,
+            cleartext=bool(manifest.get("uses_cleartext_traffic")),
+        )
         return {
+            "platform": "android",
             "path": str(resolved),
-            "inspect": inspect_apk(resolved),
+            "inspect": info,
             "security": security_scan(resolved),
             "signing": format_signing_panel(native),
             "dex": dex,
+            "intelligence": summarize_detections(detections),
+            "privacy_posture": posture,
+        }
+
+    def _analyze_ios(self, resolved: Path) -> dict:
+        from apex.ios.ipa import inspect_ipa
+
+        report = inspect_ipa(resolved)
+        detections = list(report.get("trackers", [])) + list(report.get("libraries", []))
+        ats_insecure = any(
+            f.get("category") == "ios-transport-security" for f in report.get("findings", [])
+        )
+        posture = assess_posture(
+            platform="ios",
+            permissions=[],
+            detections=detections,
+            cleartext=ats_insecure,
+            privacy_manifest=report.get("privacy_manifest"),
+        )
+        return {
+            "platform": "ios",
+            "path": str(resolved),
+            "ios": report,
+            "security": {"verdict": posture["grade"], "findings": report.get("findings", [])},
+            "intelligence": summarize_detections(detections),
+            "privacy_posture": posture,
         }
 
     def do_GET(self) -> None:  # noqa: N802
@@ -240,6 +305,13 @@ class ApexWebHandler(BaseHTTPRequestHandler):
                 payload = self._payload() if int(self.headers.get("Content-Length", "0")) else {}
                 db = Path(str(payload.get("db") or Path.home() / ".apex" / "corpus.db"))
                 self._json(sync_device(serial, db, user_id=int(payload.get("user", 0))))
+                return
+            if route.path == "/api/sbom":
+                payload = self._payload()
+                app = Path(str(payload.get("path", ""))).expanduser().resolve()
+                if not app.is_file():
+                    raise ApexError(f"application not found: {app}")
+                self._json(generate_sbom(app))
                 return
             if route.path == "/api/decompile":
                 payload = self._payload()
