@@ -38,6 +38,7 @@ chaquopy {
         buildPython "python3.10"
         extractPackages "apex", "androguard"
         pip {
+            options("--no-deps")
             install "cryptography==42.0.8"
             install "lxml>=4.9.0"
             install "asn1crypto>=1.5.0"
@@ -49,7 +50,7 @@ chaquopy {
             install "pygments>=2.0"
             install "apkInspector>=1.1.0"
             install "typing_extensions"
-            install "androguard==4.0.2"
+            install "androguard==4.1.4"
         }
     }
     sourceSets {
