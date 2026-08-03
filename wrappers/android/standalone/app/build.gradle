@@ -51,11 +51,7 @@ chaquopy {
             install "apkInspector>=1.1.0"
             install "typing_extensions"
             install "androguard==4.1.4"
-        }
-    }
-    sourceSets {
-        getByName("main") {
-            srcDir("../../../")
+            install("../../../")
         }
     }
 }
