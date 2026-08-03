@@ -63,7 +63,7 @@
     {
       "label": "APEX: Build standalone phone APK",
       "type": "shell",
-      "command": "bash wrappers/android/build_standalone.sh",
+      "command": "bash build_standalone.sh",
       "options": {
         "cwd": "${workspaceFolder}",
         "env": {

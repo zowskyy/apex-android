@@ -54,9 +54,9 @@ apex gui
 ### Use on your phone
 
 **Standalone (recommended):** install **`apex-mobile.apk`** — the full APEX engine runs
-on your device (offline). Build with `bash wrappers/android/build_standalone.sh` or
-download from GitHub Actions **Android standalone APK**. See
-[wrappers/android/README.md](wrappers/android/README.md).
+on your device (offline). Build: **[docs/BUILD_STANDALONE_APK.md](docs/BUILD_STANDALONE_APK.md)**
+(`bash build_standalone.sh` or VS Code task). Or download from GitHub Actions
+**Android standalone APK**. Overview: [wrappers/android/README.md](wrappers/android/README.md).
 
 **Companion mode:** run APEX on your computer and use the thin client or browser:
 

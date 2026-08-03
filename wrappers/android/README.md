@@ -1,5 +1,7 @@
 # APEX on Android
 
+**Build standalone APK (VS Code + terminal):** [docs/BUILD_STANDALONE_APK.md](../../docs/BUILD_STANDALONE_APK.md)
+
 Two APK builds — pick the one that matches how you want to work.
 
 | APK | Build | Role |
