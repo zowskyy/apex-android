@@ -7,16 +7,11 @@ from pathlib import Path
 
 from apex.analysis import ApexError, resolve_android_package, sha256_file
 from apex.gate.models import GateFinding, GateReport, GateStage, GateStatus
+from apex.gate.scanners.dex_watch import scan_dex_watch
+from apex.gate.scanners.native import scan_native
 from apex.gate.scanners.secrets import scan_secrets
 from apex.gate.scanners.static import scan_dex, scan_manifest, scan_security
-
-# Slice 7 weights (static analysis scope — not device farm / chaos).
-_SCANNER_WEIGHTS: dict[str, float] = {
-    "manifest": 0.30,
-    "dex": 0.20,
-    "security": 0.35,
-    "secrets": 0.15,
-}
+from apex.gate.weights import load_scanner_weights
 
 _STAGE_MIN_SCORE: dict[GateStage, float] = {
     "candidate": 60.0,
@@ -37,9 +32,9 @@ def _scanner_score(findings: list[GateFinding], scanner: str) -> float:
     return 100.0
 
 
-def _weighted_score(findings: list[GateFinding]) -> float:
+def _weighted_score(findings: list[GateFinding], weights: dict[str, float]) -> float:
     total = 0.0
-    for scanner, weight in _SCANNER_WEIGHTS.items():
+    for scanner, weight in weights.items():
         total += weight * _scanner_score(findings, scanner)
     return total
 
@@ -50,12 +45,14 @@ def run_hard_gate(
     msv: int = 28,
     stage: GateStage = "candidate",
     workspace: Path | None = None,
+    weights_path: Path | None = None,
 ) -> GateReport:
-    """Execute Slice 0/1/7 static hard gates on an APK or nested container."""
+    """Execute static hard gates on an APK or nested container."""
     source = Path(apk_path)
     if not source.is_file():
         raise ApexError(f"package not found: {source}")
 
+    weights = load_scanner_weights(weights_path)
     work = workspace or source.parent
     resolved, container = resolve_android_package(source, work)
     findings: list[GateFinding] = []
@@ -63,8 +60,10 @@ def run_hard_gate(
     findings.extend(scan_dex(resolved))
     findings.extend(scan_security(resolved))
     findings.extend(scan_secrets(resolved))
+    findings.extend(scan_native(resolved))
+    findings.extend(scan_dex_watch(resolved))
 
-    score = _weighted_score(findings)
+    score = _weighted_score(findings, weights)
     blocking = [
         f"{f.scanner}:{f.category}: {f.message}"
         for f in findings
@@ -90,5 +89,7 @@ def run_hard_gate(
 def write_gate_report(report: GateReport, out_path: Path) -> Path:
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(report.to_dict(), indent=2) + "\n", encoding="utf-8")
+    payload = report.to_dict()
+    payload["weights"] = load_scanner_weights()
+    out_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     return out_path

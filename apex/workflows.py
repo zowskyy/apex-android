@@ -727,6 +727,11 @@ def security_scan(apk_path: Path) -> dict[str, Any]:
     for item in scan_apk_secrets(apk_path):
         findings.append(item)
 
+    from .native_scan import scan_apk_native_libs
+
+    for item in scan_apk_native_libs(apk_path):
+        findings.append(item)
+
     order = {"low": 1, "medium": 2, "high": 3, "critical": 4}
     highest = max((order[item["severity"]] for item in findings), default=0)
     verdict = "HIGH_RISK" if highest >= 3 else ("REVIEW" if findings else "CLEAN")

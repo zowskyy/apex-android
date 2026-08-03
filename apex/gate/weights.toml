@@ -1,0 +1,10 @@
+# APEX hard-gate scanner weights (must sum to 1.0).
+# Edit here when adding scanners — runner loads this file (Slice XS-7).
+
+[weights]
+manifest = 0.25
+dex = 0.15
+security = 0.30
+secrets = 0.18
+native = 0.10
+dex_watch = 0.02

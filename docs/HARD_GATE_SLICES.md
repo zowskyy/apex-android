@@ -6,7 +6,9 @@ roadmap applies selectively:
 | Slice | Topic | APEX status |
 |-------|--------|-------------|
 | **0** | Modular gate models + CI exit codes | **Implemented** — `apex/gate/`, `apex gate --ci` |
-| **1** | Manifest MSV, DEX rigor, permissions, **secret patterns** | **Implemented** — static scanners + `secrets` gate weight |
+| **1** | Manifest MSV, DEX rigor, permissions, **secret patterns (assets + DEX strings)** | **Implemented** — `secrets_scan`, gate `secrets` |
+| **1b** | Native ELF hardening prelude | **Partial** — `native_scan`, gate `native` |
+| **1c** | DEX string watchlist (reflection/crypto hints) | **Partial** — gate `dex_watch` (xref API-watch is future) |
 | **2** | Firebase Test Lab | **N/A** — analyze third-party APKs; optional future for APEX Mobile QA |
 | **3** | Perfetto / TTI on device | **N/A** — same; use for APEX app RC only if added later |
 | **4** | MobSF Docker SAST | **Partial** — built-in `security_scan`; MobSF optional external |

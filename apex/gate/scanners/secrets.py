@@ -40,7 +40,7 @@ def scan_secrets(apk_path: Path) -> list[GateFinding]:
                 scanner="secrets",
                 status=GateStatus.PASS,
                 category="secrets-clean",
-                message="No secret/credential patterns in scanned text assets",
+                message="No secret/credential patterns in scanned assets or DEX string pools",
             )
         )
 
