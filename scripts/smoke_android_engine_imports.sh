@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Verify Chaquopy bundled the Python engine into the release APK.
+# Verify Chaquopy bundled Python assets into the release APK.
 #
 # Usage: scripts/smoke_android_engine_imports.sh
 set -euo pipefail
@@ -24,26 +24,44 @@ tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
 unzip -q "$APK" -d "$tmpdir"
 
-search_apk_tree() {
+apk_size="$(stat -c%s "$APK")"
+if [[ "$apk_size" -lt 35000000 ]]; then
+  echo "  FAIL APK too small (${apk_size} bytes) — engine probably not bundled" >&2
+  exit 1
+fi
+echo "  ok  APK size ${apk_size} bytes"
+
+if [[ ! -d "$tmpdir/assets/chaquopy" ]]; then
+  echo "  FAIL missing assets/chaquopy in APK" >&2
+  exit 1
+fi
+echo "  ok  chaquopy assets present"
+
+search_tree() {
   local pattern="$1"
-  find "$tmpdir" -iname "*${pattern}*" 2>/dev/null | head -1
+  if find "$tmpdir" -iname "*${pattern}*" 2>/dev/null | grep -q .; then
+    return 0
+  fi
+  if unzip -l "$APK" 2>/dev/null | grep -qi "$pattern"; then
+    return 0
+  fi
+  local archive
+  while IFS= read -r archive; do
+    if unzip -l "$archive" 2>/dev/null | grep -qi "$pattern"; then
+      return 0
+    fi
+  done < <(find "$tmpdir" -type f \( -name '*.zip' -o -name '*.whl' \) 2>/dev/null)
+  return 1
 }
 
 check_in_apk() {
   local label="$1"
   local pattern="$2"
-  local hit
-  hit="$(search_apk_tree "$pattern")"
-  if [[ -n "$hit" ]]; then
+  if search_tree "$pattern"; then
     echo "  ok  $label"
   else
-    # Chaquopy may store pure-Python modules inside nested zip assets.
-    if unzip -l "$APK" 2>/dev/null | grep -qi "$pattern"; then
-      echo "  ok  $label (nested asset)"
-    else
-      echo "  FAIL $label (pattern: $pattern)"
-      return 1
-    fi
+    echo "  FAIL $label (pattern: $pattern)"
+    return 1
   fi
 }
 
