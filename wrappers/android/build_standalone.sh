@@ -14,8 +14,8 @@ if ! command -v "$GRADLE" >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! command -v python3 >/dev/null 2>&1; then
-  echo "python3 is required for Chaquopy pip installs during the Gradle build." >&2
+if ! command -v python3.10 >/dev/null 2>&1; then
+  echo "python3.10 is required for Chaquopy pip installs (must match app Python 3.10)." >&2
   exit 1
 fi
 
