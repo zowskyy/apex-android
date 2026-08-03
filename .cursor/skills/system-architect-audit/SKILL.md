@@ -202,5 +202,33 @@ When auditing an APEX commit or PR:
 3. Integration simulation notes edge cases
 4. Readiness score with go/no-go rationale
 5. Delta list vs previous audit (if applicable)
+6. **Demo video** when review is complete — record start-to-finish proof (see below)
 
 **Do not mark Green because docs look complete. Mark Green because controls are wired and tested.**
+
+---
+
+## Phase 6 — Demo video (end of review)
+
+When the audit/review is **complete** (bill of work done, release shipped or PR merged),
+record a **start-to-finish video** showing the system working as documented.
+
+### What to show (APEX checklist)
+
+1. Version sync: `bash scripts/release/check_version_sync.sh`
+2. `apex doctor` — toolchain OK
+3. Sample APK: `apex inspect` + `apex security-scan` + `apex gate --ci`
+4. Audit trail: `AuditLogger().verify_integrity()` or compliance report
+5. Release proof: GitHub Release assets or `gh release view vX.Y.Z`
+6. Optional: `apex gui` or mobile path if in scope
+
+### Recording
+
+- Use screen recording (Cursor `RecordScreen` or local capture)
+- Save as `apex-demo-vX.Y.Z` — provide MP4 for broad compatibility
+- Narrate or subtitle key steps so a new engineer can follow without the doc
+
+### When to skip
+
+- Docs-only PR with no runnable surface
+- CI-only change with no local demo path (link green Actions run instead)
