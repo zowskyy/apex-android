@@ -58,7 +58,7 @@ jobs:
           zip -j apex-mobile-apk.zip apex-mobile.apk WHICH_APK.txt
 
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: apex-mobile-apk
           path: wrappers/android/dist/apex-mobile-apk.zip

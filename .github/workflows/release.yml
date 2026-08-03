@@ -107,7 +107,7 @@ jobs:
           chmod +x scripts/package_android_release.sh
           bash scripts/package_android_release.sh "${{ needs.prepare.outputs.version }}"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: android-release
           path: release-staging/android/*
@@ -136,7 +136,7 @@ jobs:
           chmod +x scripts/package_desktop_release.sh
           bash scripts/package_desktop_release.sh "${{ needs.prepare.outputs.version }}" linux
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: desktop-linux
           path: release-staging/APEX-*-linux-x64.tar.gz
@@ -166,7 +166,7 @@ jobs:
           chmod +x scripts/package_desktop_release.sh
           bash scripts/package_desktop_release.sh "${{ needs.prepare.outputs.version }}" windows
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: desktop-windows
           path: release-staging/APEX-*-windows-x64.zip
@@ -195,7 +195,7 @@ jobs:
           chmod +x scripts/package_desktop_release.sh
           bash scripts/package_desktop_release.sh "${{ needs.prepare.outputs.version }}" macos
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: desktop-macos
           path: release-staging/APEX-*-macos.zip
@@ -232,7 +232,7 @@ jobs:
           export APEX_AUDIT_CONTEXT=release-verify
           python scripts/security/scan_apk.py "$APK" -o gate-release.json --stage candidate --msv 21
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: gate-release-report
           path: gate-release.json
@@ -256,7 +256,7 @@ jobs:
           pip-audit || echo "pip-audit advisory findings"
           python scripts/release/generate_sbom.py sbom.json
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: supply-chain-sbom
           path: sbom.json
