@@ -3,7 +3,7 @@
 set -euo pipefail
 
 SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}}"
-BUILD_TOOLS_VERSION="${APEX_BUILD_TOOLS:-36.0.0}"
+BUILD_TOOLS_VERSION="${APEX_BUILD_TOOLS:-}"
 PLATFORM="${APEX_ANDROID_PLATFORM:-android-34}"
 MIN_API="${APEX_MIN_API:-24}"
 
@@ -17,9 +17,18 @@ INJECT="$ROOT/tools/mobile_test_app/inject_dex.py"
 export ANDROID_HOME="$SDK"
 export ANDROID_SDK_ROOT="$SDK"
 
+if [[ -z "$BUILD_TOOLS_VERSION" ]]; then
+  if [[ -d "$SDK/build-tools" ]]; then
+    BUILD_TOOLS_VERSION="$(basename "$(ls -d "$SDK"/build-tools/* 2>/dev/null | sort -V | tail -1)")"
+  fi
+  BUILD_TOOLS_VERSION="${BUILD_TOOLS_VERSION:-34.0.0}"
+fi
+
 pick_tool() {
   local name="$1"
-  if command -v "$name" >/dev/null 2>&1; then
+  if [[ -n "${JAVA_HOME:-}" && -x "$JAVA_HOME/bin/$name" ]]; then
+    echo "$JAVA_HOME/bin/$name"
+  elif command -v "$name" >/dev/null 2>&1; then
     echo "$name"
   elif [[ -x "$BUILD_TOOLS/$name" ]]; then
     echo "$BUILD_TOOLS/$name"
@@ -28,7 +37,7 @@ pick_tool() {
   elif [[ -x "$BUILD_TOOLS/${name}.bat" ]]; then
     echo "$BUILD_TOOLS/${name}.bat"
   else
-    echo "Missing Android build tool: $name (set ANDROID_HOME)" >&2
+    echo "Missing Android/JDK tool: $name (set ANDROID_HOME / JAVA_HOME)" >&2
     exit 1
   fi
 }

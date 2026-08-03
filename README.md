@@ -72,7 +72,7 @@ APKs and generated source remain in the configured local workspace.
 | Windows | `wrappers\windows\apex-gui.bat` · `apex-mobile.bat` |
 | macOS | `wrappers/macos/apex-gui.command` · build `.app` with `create-apps.sh` |
 | Linux | `wrappers/linux/apex-gui.sh` · desktop entries via `install.sh` |
-| Android | WebView client APK: `wrappers/android/build.sh` |
+| Android phone | Client APK: [wrappers/android/README.md](wrappers/android/README.md) (VS Code tasks + GitHub artifact) |
 | iOS | Safari + Add to Home Screen ([wrappers/ios/README.md](wrappers/ios/README.md)) |
 | Docker | `wrappers/docker/run.sh` |
 
