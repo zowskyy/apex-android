@@ -18,6 +18,7 @@ from .analysis import (
     ApexError,
     dex_metadata,
     inspect_apk,
+    normalize_uploaded_package,
     resolve_android_package,
     sanitized_zip_name,
 )
@@ -101,8 +102,10 @@ $("identity").innerHTML=kv("Package",m.package)+kv("Version",`${m.version_name||
 $("components").innerHTML=pills([...(m.activities||[]),...(m.services||[]),...(m.receivers||[]),...(m.providers||[])]);
 $("permissions").innerHTML=pills(m.permissions||[]);
 const noDex=(data.dex?.classes||[]).length===0;
+const dexErrors=(data.dex?.errors||[]).map(e=>`<div class="finding low"><strong>DEX ${esc(e.dex)}</strong> · ${esc(e.error)}</div>`).join("");
+const headerDex=data.dex?.header_class_defs?`<div class="finding low"><strong>DEX header</strong> · ${data.dex.header_class_defs} class defs reported in file header (full parse failed).</div>`:"";
 const findingHtml=s.findings.length?s.findings.map(f=>`<div class="finding ${esc(f.severity)}"><strong>${esc(f.category)}</strong> · ${esc(f.message)}<br><small>${esc(f.evidence||"")}</small></div>`).join(""):'';
-$("findings").innerHTML=noDex?`<div class="finding low"><strong>No DEX in this file</strong> · Upload an APK, or a ZIP that contains an APK inside.</div>${findingHtml}`:(findingHtml||'<span class="empty">No static security findings.</span>');
+$("findings").innerHTML=noDex?`<div class="finding low"><strong>No DEX in this file</strong> · Upload an APK, or a ZIP that contains an APK inside.</div>${headerDex}${dexErrors}${findingHtml}`:(findingHtml||'<span class="empty">No static security findings.</span>');
 $("technical").innerHTML=kv("Format",(i.format||"apk").toUpperCase())+kv("DEX files",(i.dex_files||[]).join(", ")||"none")+kv("Native ABIs",(i.native_abis||[]).join(", ")||"none")+kv("Resource packages",(i.resource_table?.packages||[]).join(", ")||"none")+kv("Locales",(i.resource_table?.locales||[]).join(", ")||"none");renderClasses()}
 async function pathAnalyze(path){busy(true);try{const r=await fetch("/api/open",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({path})});const d=await r.json();if(!r.ok)throw Error(d.error||"Analysis failed");render(d)}catch(e){alert(e.message)}finally{busy(false)}}
 async function upload(file){if(!file)return;busy(true);try{const r=await fetch("/api/upload?name="+encodeURIComponent(file.name),{method:"POST",body:file});const d=await r.json();if(!r.ok)throw Error(d.error||"Upload failed");render(d)}catch(e){alert(e.message)}finally{busy(false)}}
@@ -183,6 +186,7 @@ class ApexWebHandler(BaseHTTPRequestHandler):
         workspace = Path(getattr(self.server, "workspace"))
         resolved, container = resolve_android_package(path, workspace)
         dex = {"classes": [], "methods": [], "edges": [], "errors": []}
+        lightweight = getattr(self.server, "dex_lightweight", False)
         with zipfile.ZipFile(resolved) as archive:
             for name in sorted(
                 item
@@ -190,9 +194,13 @@ class ApexWebHandler(BaseHTTPRequestHandler):
                 if re.fullmatch(r"(?:.*/)?classes\d*\.dex", item)
             ):
                 try:
-                    metadata = dex_metadata(archive.read(name), name)
+                    metadata = dex_metadata(archive.read(name), name, lightweight=lightweight)
                     for key in ("classes", "methods", "edges"):
                         dex[key].extend(metadata[key])
+                    if metadata.get("header_class_defs") and not metadata.get("classes"):
+                        dex["header_class_defs"] = metadata["header_class_defs"]
+                    for err in metadata.get("errors") or []:
+                        dex["errors"].append(err)
                 except Exception as exc:
                     dex["errors"].append({"dex": name, "error": str(exc)})
         dex = self._cap_dex(dex)
@@ -237,6 +245,7 @@ class ApexWebHandler(BaseHTTPRequestHandler):
                 upload_root.mkdir(parents=True, exist_ok=True)
                 destination = upload_root / safe_name
                 destination.write_bytes(self._body())
+                destination = normalize_uploaded_package(destination)
                 self._json(self._analyze_path(destination))
                 return
             if route.path == "/api/decompile":
@@ -250,8 +259,16 @@ class ApexWebHandler(BaseHTTPRequestHandler):
                 result = decompile_apk(resolved, output)
                 class_count = len(result["classes"])
                 hint = ""
+                inspect_info = inspect_apk(resolved)
+                dex_files = inspect_info.get("dex_files") or []
                 if class_count == 0:
-                    if container.get("nested_apks") and not container.get("resolved_from"):
+                    if dex_files:
+                        hint = (
+                            f"DEX present ({', '.join(dex_files)}) but decompile returned 0 classes. "
+                            "Large APKs on-device use a capped decompile — try a smaller target APK "
+                            "or Settings → Desktop computer."
+                        )
+                    elif container.get("nested_apks") and not container.get("resolved_from"):
                         hint = "ZIP has no DEX at the root. Nested APKs were not extracted."
                     elif container.get("resolved_from"):
                         hint = f"No DEX in {container['resolved_from']}. Try another APK inside the ZIP."
@@ -333,6 +350,7 @@ def serve(
     server.workspace = str(workspace)  # type: ignore[attr-defined]
     server.upload_max = int(profile.get("max_upload_bytes", 512 * 1024 * 1024))  # type: ignore[attr-defined]
     server.dex_class_cap = int(profile.get("dex_class_cap", 0) or 0)  # type: ignore[attr-defined]
+    server.dex_lightweight = bool(profile.get("dex_lightweight")) or engine_mode == "on_device"  # type: ignore[attr-defined]
     server.engine_mode = engine_mode  # type: ignore[attr-defined]
 
     if standalone:

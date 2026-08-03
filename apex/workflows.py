@@ -258,7 +258,12 @@ def decompile_apk(
         )
         for dex_name in dex_names:
             try:
-                dex, _ = load_dex(archive.read(dex_name), with_decompiler=True)
+                lightweight = bool(device_limits().get("dex_lightweight"))
+                dex, _ = load_dex(
+                    archive.read(dex_name),
+                    with_decompiler=True,
+                    lightweight=lightweight,
+                )
             except Exception as exc:
                 index["errors"].append({"dex": dex_name, "error": str(exc)})
                 continue

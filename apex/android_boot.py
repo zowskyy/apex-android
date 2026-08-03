@@ -28,6 +28,13 @@ def prepare_engine(workspace: str, ram_mb: int = 0, cpu_cores: int = 0) -> dict[
         _write_status(workspace_path, "loading", "importing androguard")
         import androguard  # noqa: F401
 
+        _write_status(workspace_path, "loading", "validating parsers")
+        from apex.engine_validate import validate_on_device_parsers
+
+        validation = validate_on_device_parsers()
+        if validation.get("ok") != "true":
+            raise RuntimeError(validation.get("error", "parser validation failed"))
+
         _write_status(workspace_path, "ready", "imports complete")
         return {"ok": "true", "androguard": getattr(androguard, "__version__", "installed")}
     except Exception as exc:

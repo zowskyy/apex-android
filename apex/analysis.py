@@ -11,6 +11,7 @@ import hashlib
 import json
 import re
 import shutil
+import struct
 import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
@@ -76,6 +77,39 @@ def sanitized_zip_name(raw_name: str) -> str | None:
     return "/".join(parts)
 
 
+def _looks_like_zip_archive(path: Path) -> bool:
+    """True when file bytes start with ZIP local-header magic (PK)."""
+    try:
+        with path.open("rb") as stream:
+            return stream.read(2) == b"PK"
+    except OSError:
+        return False
+
+
+def normalize_uploaded_package(path: Path) -> Path:
+    """Rename picker uploads that lost their extension (common on Android WebView)."""
+    path = Path(path)
+    suffix = path.suffix.lower()
+    if suffix in {".apk", ".zip", ".xapk", ".apks"}:
+        return path
+    if not _looks_like_zip_archive(path):
+        return path
+    renamed = path.with_name(f"{path.name}.zip")
+    path.rename(renamed)
+    return renamed
+
+
+def dex_header_stats(raw: bytes) -> dict[str, int]:
+    """Read class/method counts from the DEX header without full parsing."""
+    if len(raw) < 0x40 or raw[:4] != b"dex\n":
+        return {}
+    return {
+        "class_defs_size": struct.unpack_from("<I", raw, 0x38)[0],
+        "method_ids_size": struct.unpack_from("<I", raw, 0x34)[0],
+        "string_ids_size": struct.unpack_from("<I", raw, 0x24)[0],
+    }
+
+
 def package_has_dex(path: Path) -> bool:
     """Return True when the archive contains APK-style classes*.dex entries."""
     try:
@@ -124,7 +158,8 @@ def resolve_android_package(path: Path, workspace: Path | None = None) -> tuple[
     if package_has_dex(path):
         return path, meta
 
-    if path.suffix.lower() not in {".zip", ".xapk", ".apks", ".apk"}:
+    looks_like_zip = _looks_like_zip_archive(path)
+    if not looks_like_zip and path.suffix.lower() not in {".zip", ".xapk", ".apks", ".apk"}:
         return path, meta
 
     try:
@@ -132,9 +167,16 @@ def resolve_android_package(path: Path, workspace: Path | None = None) -> tuple[
             nested = _nested_apk_entries(archive.namelist())
             meta["nested_apks"] = nested
             if not nested:
-                meta["container_note"] = (
-                    "No DEX classes in this file. Upload an APK, or a ZIP that contains one."
-                )
+                lowered = [name.lower().replace("\\", "/") for name in archive.namelist()]
+                if any("/wheels/" in name or name.startswith("wheels/") for name in lowered):
+                    meta["container_note"] = (
+                        "This looks like a desktop APEX bundle (Python wheels), not an Android APK. "
+                        "Install APEX-Mobile-*.apk from Releases, or upload a third-party APK."
+                    )
+                else:
+                    meta["container_note"] = (
+                        "No DEX classes in this file. Upload an APK, or a ZIP that contains one."
+                    )
                 return path, meta
 
             pick = _pick_nested_apk(archive, nested)
@@ -233,6 +275,47 @@ def decode_binary_xml(raw: bytes) -> str:
     return _xml_bytes(raw).decode("utf-8", errors="replace")
 
 
+def _manifest_summary_apkinspector(raw: bytes) -> dict[str, Any]:
+    """Fast manifest decode via apkInspector (reliable on Chaquopy)."""
+    try:
+        from io import BytesIO
+
+        from apkInspector.axml import get_manifest_lite
+    except ImportError:
+        return {}
+
+    try:
+        lite = get_manifest_lite(BytesIO(raw), 400)
+    except Exception:
+        return {}
+
+    if not lite.get("package"):
+        return {}
+
+    permissions = sorted(
+        {
+            value
+            for value in lite.values()
+            if isinstance(value, str) and value.startswith("android.permission.")
+        }
+    )
+    return {
+        "package": str(lite.get("package", "")),
+        "version_code": str(lite.get("versionCode", "")),
+        "version_name": str(lite.get("versionName", "")),
+        "min_sdk": str(lite.get("minSdkVersion", "")),
+        "target_sdk": str(lite.get("targetSdkVersion", "")),
+        "permissions": permissions,
+        "activities": [],
+        "services": [],
+        "receivers": [],
+        "providers": [],
+        "main_activity": str(lite.get("name", "")),
+        "debuggable": str(lite.get("debuggable", "")).lower() == "true",
+        "parser": "apkinspector",
+    }
+
+
 def _manifest_summary(raw: bytes) -> dict[str, Any]:
     result: dict[str, Any] = {
         "package": "",
@@ -248,9 +331,25 @@ def _manifest_summary(raw: bytes) -> dict[str, Any]:
         "main_activity": "",
         "debuggable": False,
     }
+    prefer_apkinspector = False
+    try:
+        from apex.device_profile import limits
+
+        prefer_apkinspector = limits().get("engine_mode") == "on_device"
+    except Exception:
+        pass
+
+    if prefer_apkinspector:
+        apki = _manifest_summary_apkinspector(raw)
+        if apki.get("package"):
+            return apki
+
     try:
         root = ET.fromstring(_xml_bytes(raw))
     except Exception as exc:
+        apki = _manifest_summary_apkinspector(raw)
+        if apki.get("package"):
+            return apki
         result["error"] = str(exc)
         return result
 
@@ -409,23 +508,97 @@ def descriptor_to_java(descriptor: str) -> str:
     return primitives.get(descriptor, descriptor)
 
 
-def load_dex(raw: bytes, with_decompiler: bool = False) -> tuple[Any, Any]:
+def load_dex(raw: bytes, with_decompiler: bool = False, lightweight: bool = False) -> tuple[Any, Any]:
     if DEX is None or Analysis is None:
         raise ApexError("DEX analysis requires the 'androguard' dependency")
     dex = DEX(raw)
     analysis = Analysis(dex)
-    analysis.create_xref()
+    if not lightweight:
+        analysis.create_xref()
     if with_decompiler and DecompilerDAD is not None:
         dex.set_decompiler(DecompilerDAD(dex, analysis))
     return dex, analysis
 
 
-def dex_metadata(raw: bytes, dex_name: str = "classes.dex") -> dict[str, Any]:
-    if _native_dex is not None:
+def _dex_metadata_lightweight(raw: bytes, dex_name: str) -> dict[str, Any]:
+    """Class/method listing without xref (fast, low RAM — used on-device)."""
+    dex, _ = load_dex(raw, lightweight=True)
+    classes: list[dict[str, Any]] = []
+    methods: list[dict[str, Any]] = []
+    for cls in dex.get_classes():
+        descriptor = str(cls.get_name())
+        class_name = descriptor_to_java(descriptor)
+        classes.append(
+            {
+                "dex": dex_name,
+                "name": class_name,
+                "descriptor": descriptor,
+                "super": descriptor_to_java(str(cls.get_superclassname() or "")),
+                "interfaces": [descriptor_to_java(str(item)) for item in cls.get_interfaces()],
+                "access": cls.get_access_flags_string(),
+                "source_file_index": int(cls.get_source_file_idx()),
+            }
+        )
+        for method in cls.get_methods():
+            code = method.get_code()
+            methods.append(
+                {
+                    "dex": dex_name,
+                    "class": class_name,
+                    "name": str(method.get_name()),
+                    "descriptor": str(method.get_descriptor()),
+                    "access": method.get_access_flags_string(),
+                    "has_code": code is not None,
+                    "instruction_count": (
+                        sum(1 for _ in method.get_instructions()) if code is not None else 0
+                    ),
+                }
+            )
+    return {
+        "dex": dex_name,
+        "classes": classes,
+        "methods": methods,
+        "strings": [str(value) for value in dex.get_strings()[:50_000]],
+        "edges": [],
+        "lightweight": True,
+    }
+
+
+def dex_metadata(raw: bytes, dex_name: str = "classes.dex", lightweight: bool | None = None) -> dict[str, Any]:
+    if lightweight is None:
+        try:
+            from apex.device_profile import limits
+
+            profile = limits()
+            lightweight = bool(profile.get("dex_lightweight")) or profile.get("engine_mode") == "on_device"
+        except Exception:
+            lightweight = False
+
+    if _native_dex is not None and not lightweight:
         try:
             return dict(_native_dex.dex_metadata(raw, dex_name))
         except Exception:
             pass
+
+    if lightweight:
+        try:
+            return _dex_metadata_lightweight(raw, dex_name)
+        except Exception as exc:
+            header = dex_header_stats(raw)
+            if header.get("class_defs_size", 0) > 0:
+                count = header["class_defs_size"]
+                return {
+                    "dex": dex_name,
+                    "classes": [],
+                    "methods": [],
+                    "strings": [],
+                    "edges": [],
+                    "errors": [{"dex": dex_name, "error": str(exc)}],
+                    "header_class_defs": count,
+                    "lightweight": True,
+                }
+            raise
+
     dex, analysis = load_dex(raw)
     classes: list[dict[str, Any]] = []
     methods: list[dict[str, Any]] = []

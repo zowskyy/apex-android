@@ -22,6 +22,7 @@ DESKTOP_LIMITS: dict[str, Any] = {
     "max_decompile_classes": 50_000,
     "class_display_limit": 300,
     "dex_class_cap": 0,  # 0 = unlimited
+    "dex_lightweight": False,
 }
 
 TIER_LIMITS: dict[str, dict[str, Any]] = {
@@ -34,6 +35,7 @@ TIER_LIMITS: dict[str, dict[str, Any]] = {
         "max_decompile_classes": 600,
         "class_display_limit": 150,
         "dex_class_cap": 12_000,
+        "dex_lightweight": True,
     },
     "medium": {
         "tier": "medium",
@@ -44,6 +46,7 @@ TIER_LIMITS: dict[str, dict[str, Any]] = {
         "max_decompile_classes": 1_200,
         "class_display_limit": 200,
         "dex_class_cap": 20_000,
+        "dex_lightweight": True,
     },
     "high": {
         "tier": "high",
@@ -54,6 +57,7 @@ TIER_LIMITS: dict[str, dict[str, Any]] = {
         "max_decompile_classes": 4_000,
         "class_display_limit": 300,
         "dex_class_cap": 50_000,
+        "dex_lightweight": True,
     },
 }
 
