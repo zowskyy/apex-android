@@ -1,5 +1,10 @@
 # Build the APEX Mobile standalone APK (VS Code + terminal)
 
+> **White screen + “Server URL” menu?** You installed the **wrong APK** (companion client).
+> Download **`apex-mobile-apk-FULL-ON-DEVICE`** from Actions → **Android standalone APK**,
+> not `apex-companion-client-apk-NEEDS-PC-SERVER`. Companion app name: **APEX Companion**.
+> Standalone app name: **APEX Mobile**.
+
 **Find this guide:** `docs/BUILD_STANDALONE_APK.md`  
 **Output APK:** `wrappers/android/dist/apex-mobile.apk`  
 **Repo script (root):** `build_standalone.sh`  
@@ -185,9 +190,9 @@ exec bash "$ROOT/wrappers/android/build_standalone.sh"
 ## Skip local build — download from GitHub
 
 1. https://github.com/zowskyy/apex-android/actions  
-2. Workflow: **Android standalone APK**  
-3. Latest green run → artifact **`apex-mobile-apk`**  
-4. Unzip → install `apex-mobile.apk` on your phone
+2. Workflow: **Android standalone APK** (not “Android client APK”)  
+3. Latest green run → artifact **`apex-mobile-apk-FULL-ON-DEVICE`**  
+4. Unzip → read `WHICH_APK.txt` → install **`apex-mobile.apk`** (app: **APEX Mobile**)
 
 ---
 

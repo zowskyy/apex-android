@@ -38,9 +38,32 @@ jobs:
           bash wrappers/android/build.sh
           ls -la wrappers/android/dist/apex-client.apk
 
+      - name: Package companion artifact with README
+        run: |
+          cat > wrappers/android/dist/WHICH_APK.txt << 'EOF'
+          ========================================
+          APEX COMPANION APK (apex-client.apk)
+          ========================================
+          This is NOT the full on-phone engine.
+          App name on phone: "APEX Companion"
+          Menu item: "Server URL"
+
+          You need a PC on the same Wi-Fi running:
+            apex mobile
+
+          Then set Server URL to e.g. http://192.168.1.42:8765
+
+          FOR ON-DEVICE ANALYSIS (no PC):
+          GitHub Actions -> "Android standalone APK"
+          Download artifact: apex-mobile-apk
+          Install apex-mobile.apk (app name: APEX Mobile)
+          EOF
+          cd wrappers/android/dist
+          zip -j apex-companion-client-apk.zip apex-client.apk WHICH_APK.txt
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: apex-client-apk
-          path: wrappers/android/dist/apex-client.apk
+          name: apex-companion-client-apk-NEEDS-PC-SERVER
+          path: wrappers/android/dist/apex-companion-client-apk.zip
           if-no-files-found: error

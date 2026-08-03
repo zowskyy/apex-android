@@ -61,8 +61,21 @@ public class MainActivity extends Activity {
             startEngineService(service);
             waitForLocalEngine(LOCAL_URL);
         } else {
-            webView.loadUrl(getRemoteUrl(this));
+            connectRemote(getRemoteUrl(this));
         }
+    }
+
+    private void connectRemote(final String url) {
+        new Thread(() -> {
+            final boolean ok = pingHealth(url);
+            runOnUiThread(() -> {
+                if (ok) {
+                    webView.loadUrl(url);
+                } else {
+                    EngineHelp.showRemoteFailed(webView, url);
+                }
+            });
+        }).start();
     }
 
     private void startEngineService(Intent service) {
@@ -102,7 +115,7 @@ public class MainActivity extends Activity {
                 if (ok) {
                     webView.loadUrl(url);
                 } else {
-                    Toast.makeText(this, "Engine failed to start", Toast.LENGTH_LONG).show();
+                    EngineHelp.showEngineFailed(webView);
                 }
             });
         }).start();

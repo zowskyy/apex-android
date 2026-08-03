@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">APEX</string>
-    <string name="settings_title">APEX Server</string>
+    <string name="app_name">APEX Companion</string>
+    <string name="settings_title">Companion server URL</string>
     <string name="server_hint">http://192.168.1.42:8765</string>
-    <string name="save">Save &amp; open</string>
+    <string name="save">Save &amp; reconnect</string>
     <string name="open_settings">Server URL</string>
+    <string name="companion_settings_headline">PC companion mode</string>
+    <string name="companion_settings_body">This app does not analyze APKs on your phone. On your computer (same Wi‑Fi) run: apex mobile — then paste the printed URL below.\n\nFor full on-device analysis install APEX Mobile (apex-mobile.apk) from GitHub Actions → Android standalone APK.</string>
     <string name="disclaimer_title">Acceptable Use Notice</string>
     <string name="disclaimer_subtitle">Science · Innovation · Education · Constructive creation</string>
     <string name="disclaimer_agree">I Agree — continue</string>
