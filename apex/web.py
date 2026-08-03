@@ -14,7 +14,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from .analysis import ApexError, dex_metadata, inspect_apk, resolve_android_package, sanitized_zip_name
+from .analysis import (
+    ApexError,
+    dex_metadata,
+    inspect_apk,
+    resolve_android_package,
+    sanitized_zip_name,
+)
 from .device_profile import doctor_fields
 from .device_profile import limits as device_limits
 from .workflows import decompile_apk, doctor, security_scan
