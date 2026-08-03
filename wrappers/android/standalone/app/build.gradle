@@ -38,6 +38,7 @@ chaquopy {
         buildPython "python3.10"
         extractPackages "apex", "androguard"
         pip {
+            options("--constraint", "chaquopy-constraints.txt")
             install "androguard==4.1.4"
             install "jinja2>=3.1.0"
             install "lxml>=4.9.0"

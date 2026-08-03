@@ -1,0 +1,2 @@
+# Chaquopy Android wheels cap cryptography at 42.0.8 (androguard 4.1.4 asks for 46+ on desktop).
+cryptography==42.0.8
