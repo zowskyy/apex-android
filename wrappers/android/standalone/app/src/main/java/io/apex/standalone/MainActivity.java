@@ -2,11 +2,13 @@ package io.apex.standalone;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.TypedValue;
@@ -14,6 +16,8 @@ import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.webkit.ValueCallback;
+import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -38,6 +42,7 @@ public class MainActivity extends Activity {
     static final String LOCAL_URL = "http://127.0.0.1:" + ApexEngineService.PORT;
 
     private static final int PERM_NOTIFICATIONS = 1001;
+    private static final int REQUEST_SELECT_FILE = 1002;
     private static final int MAX_WAIT_ATTEMPTS = 360; // 3 minutes
 
     private WebView webView;
@@ -45,6 +50,7 @@ public class MainActivity extends Activity {
     private ProgressBar progressBar;
     private LinearLayout loadingPanel;
     private volatile boolean uiReady = false;
+    private ValueCallback<Uri[]> pendingFileCallback;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -109,7 +115,35 @@ public class MainActivity extends Activity {
         settings.setDomStorageEnabled(true);
         settings.setBuiltInZoomControls(true);
         settings.setDisplayZoomControls(false);
+        settings.setAllowFileAccess(true);
+        settings.setAllowContentAccess(true);
         webView.setWebViewClient(new WebViewClient());
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onShowFileChooser(
+                    WebView view,
+                    ValueCallback<Uri[]> callback,
+                    FileChooserParams params
+            ) {
+                if (pendingFileCallback != null) {
+                    pendingFileCallback.onReceiveValue(null);
+                }
+                pendingFileCallback = callback;
+
+                Intent intent = params.createIntent();
+                intent.addCategory(Intent.CATEGORY_OPENABLE);
+                try {
+                    startActivityForResult(
+                            Intent.createChooser(intent, getString(R.string.choose_apk)),
+                            REQUEST_SELECT_FILE
+                    );
+                } catch (ActivityNotFoundException e) {
+                    pendingFileCallback = null;
+                    return false;
+                }
+                return true;
+            }
+        });
 
         LinearLayout.LayoutParams webLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -246,6 +280,19 @@ public class MainActivity extends Activity {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == REQUEST_SELECT_FILE) {
+            if (pendingFileCallback != null) {
+                Uri[] results = WebChromeClient.FileChooserParams.parseResult(resultCode, data);
+                pendingFileCallback.onReceiveValue(results);
+                pendingFileCallback = null;
+            }
+            return;
+        }
+        super.onActivityResult(requestCode, resultCode, data);
     }
 
     @Override
