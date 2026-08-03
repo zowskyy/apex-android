@@ -1,0 +1,96 @@
+name: "Build APEX Core Wheels"
+description: "Compiles Rust extensions (zip_reader, dex_reader) and packages apex-android wheel"
+inputs:
+  python-version:
+    description: "Python version for the apex-android wheel"
+    required: false
+    default: "3.10"
+  version:
+    description: "Release version to embed in apex-android wheel and pyproject.toml"
+    required: true
+  rust-target:
+    description: "Optional extra Rust target triple"
+    required: false
+    default: ""
+outputs:
+  wheel-name:
+    description: "Primary apex-android wheel filename"
+    value: ${{ steps.wheel.outputs.name }}
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ inputs.rust-target }}
+
+    - name: Cache Rust + Python build artifacts
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry/index
+          ~/.cargo/registry/cache
+          ~/.cargo/git/db
+          target/
+          dist/
+        key: core-${{ runner.os }}-${{ inputs.python-version }}-${{ hashFiles('Cargo.lock', 'pyproject.toml', 'core/**/Cargo.toml') }}
+        restore-keys: |
+          core-${{ runner.os }}-${{ inputs.python-version }}-
+          core-${{ runner.os }}-
+
+    - name: Build native + apex wheels
+      shell: bash
+      run: |
+        set -euo pipefail
+        VERSION="${{ inputs.version }}"
+        python -m pip install --upgrade pip maturin wheel
+
+        python <<'PY'
+        import pathlib, re, os
+        version = os.environ["APEX_VERSION"]
+        pyproject = pathlib.Path("pyproject.toml")
+        text = pyproject.read_text(encoding="utf-8")
+        pyproject.write_text(
+            re.sub(r'^version = ".*"', f'version = "{version}"', text, count=1, flags=re.M),
+            encoding="utf-8",
+        )
+        version_py = pathlib.Path("apex/version.py")
+        vtext = version_py.read_text(encoding="utf-8")
+        version_py.write_text(
+            re.sub(r'^__version__ = ".*"', f'__version__ = "{version}"', vtext, count=1, flags=re.M),
+            encoding="utf-8",
+        )
+        PY
+      env:
+        APEX_VERSION: ${{ inputs.version }}
+
+    - name: Maturin + pip wheel
+      shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p dist
+        maturin build --release -m core/zip_reader/Cargo.toml -o dist/
+        maturin build --release -m core/dex_reader/Cargo.toml -o dist/
+        python -m pip wheel . --no-deps -w dist/
+        ls -la dist/
+
+    - name: Upload wheel artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: core-wheels-${{ runner.os }}
+        path: dist/*.whl
+        if-no-files-found: error
+
+    - name: Set primary wheel output
+      id: wheel
+      shell: bash
+      run: |
+        WHEEL=$(ls dist/apex_android-*.whl 2>/dev/null | head -n1 | xargs -n1 basename)
+        if [[ -z "$WHEEL" ]]; then
+          WHEEL=$(ls dist/*.whl | head -n1 | xargs -n1 basename)
+        fi
+        echo "name=$WHEEL" >> "$GITHUB_OUTPUT"

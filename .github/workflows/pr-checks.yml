@@ -1,0 +1,48 @@
+name: PR Checks
+
+on:
+  pull_request:
+  push:
+    branches: [master, main, "cursor/**"]
+
+jobs:
+  core-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/build-core
+        with:
+          version: "0.0.0-pr"
+          python-version: "3.10"
+
+  core-test:
+    needs: core-build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: core-wheels-Linux
+          path: dist
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install Rust (for any editable fallback tests)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install wheels and smoke-test imports
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install dist/*.whl
+          python -m pip install "androguard>=4.1.4" "jinja2>=3.1.0"
+          python -c "import apex; import apex_zip_reader; import apex_dex_reader; print('Core OK', apex.__version__)"
+
+      - name: Pytest (core suites)
+        run: |
+          python -m pip install pytest ruff
+          python scripts/generate_test_apk.py tests/fixtures/sample_test.apk
+          python -m pytest -q tests/test_core.py tests/test_zip_reader.py tests/test_dex_reader.py tests/test_gate.py

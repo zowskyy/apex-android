@@ -48,8 +48,9 @@ jobs:
 
       - name: Package standalone artifact with README
         run: |
-          cat > wrappers/android/dist/WHICH_APK.txt << 'EOF'
-          APEX MOBILE APK (apex-mobile.apk) — version 0.4.10
+          VER="$(python -c 'from apex.version import __version__; print(__version__)')"
+          cat > wrappers/android/dist/WHICH_APK.txt << EOF
+          APEX MOBILE APK (apex-mobile.apk) — version ${VER}
           Full engine on phone + optional desktop remote in Settings.
           Menu: Settings (not Server URL). App name: APEX
           EOF
