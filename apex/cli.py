@@ -104,6 +104,25 @@ def build_parser() -> argparse.ArgumentParser:
     )
     framework_cmd.add_argument("apk")
 
+    gate_cmd = sub.add_parser(
+        "gate",
+        help="run static hard-gate checks (manifest MSV, DEX, security) for CI",
+    )
+    gate_cmd.add_argument("apk")
+    gate_cmd.add_argument("--msv", type=int, default=28, help="minimum supported SDK (default 28)")
+    gate_cmd.add_argument(
+        "--stage",
+        choices=["candidate", "rc", "beta", "production"],
+        default="candidate",
+        help="promotion stage thresholds (Slice 7)",
+    )
+    gate_cmd.add_argument("--out", "-o", default="gate.json", help="write gate.json report")
+    gate_cmd.add_argument(
+        "--ci",
+        action="store_true",
+        help="exit 1 if gate_passed is false (for pipelines)",
+    )
+
     sub.add_parser("doctor", help="show parser and external tool availability")
 
     gui_cmd = sub.add_parser("gui", aliases=["serve"], help="start the local web interface")
@@ -241,6 +260,25 @@ def main(argv: list[str] | None = None) -> int:
             _print(result, args.output)
         elif args.command == "framework-check":
             _print(framework_check(Path(args.apk)))
+        elif args.command == "gate":
+            from .gate import run_hard_gate, write_gate_report
+
+            report = run_hard_gate(
+                Path(args.apk),
+                msv=int(args.msv),
+                stage=args.stage,
+            )
+            out = write_gate_report(report, Path(args.out))
+            print(f"Gate report: {out}")
+            print(
+                f"score={report.score:.1f} stage={report.stage} "
+                f"passed={report.gate_passed} blocking={len(report.blocking)}"
+            )
+            if args.ci and not report.gate_passed:
+                for issue in report.blocking:
+                    print(f"BLOCK: {issue}", file=sys.stderr)
+                return 5
+            return 0
         elif args.command == "doctor":
             _print(doctor())
         elif args.command in {"gui", "serve"}:

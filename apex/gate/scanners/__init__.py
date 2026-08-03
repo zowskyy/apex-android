@@ -1,0 +1,1 @@
+"""Static hard-gate scanners."""

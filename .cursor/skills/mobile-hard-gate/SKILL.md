@@ -166,3 +166,22 @@ Mobile is done when:
 
 **Do not hand users an APK because the archive compiled. Hand them an APK because
 the engine ran on a phone.**
+
+---
+
+## 8. APK static hard gate (`apex gate`) — Slice 0/1/7
+
+For **APKs you analyze** (and golden fixtures in CI), not device-farm slices:
+
+```bash
+apex gate suspicious.apk --msv 28 --stage candidate --ci -o gate.json
+```
+
+- **FAIL** → `minSdk < MSV`, missing DEX, critical security findings
+- **WARN** → sensitive permissions without `maxSdkVersion`, exported components
+- **Stages** → weighted score thresholds (`candidate` 60, `rc` 85, `beta` 95)
+
+Slices 2–3, 6, 8–9 (Firebase, Perfetto, Monkey, AI agent, TLA+) are **N/A** for
+the analyzer core — see `docs/HARD_GATE_SLICES.md`. Use `audit_mobile_hard_gate.sh`
+for **APEX Mobile** release binaries.
+

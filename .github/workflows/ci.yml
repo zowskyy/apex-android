@@ -28,5 +28,10 @@ jobs:
         run: .venv/bin/ruff check apex tests
       - name: Pytest
         run: .venv/bin/pytest -q
+      - name: Hard gate (sample APK)
+        run: |
+          python scripts/generate_test_apk.py tests/fixtures/sample_test.apk
+          .venv/bin/apex gate tests/fixtures/sample_test.apk --msv 21 --stage candidate --ci -o gate.json
+          cat gate.json
       - name: Cargo tests
         run: cargo test --workspace
