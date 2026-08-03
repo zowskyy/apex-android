@@ -133,6 +133,11 @@ fixtures for extraction and traversal regression tests.
 APEX Community edition is MIT licensed. Third-party parsers and tools retain
 their own licenses; see `NOTICE`. Androguard is used under Apache License 2.0.
 
+**Acceptable use:** APEX is intended for science, education, research, and
+constructive engineering. See [docs/ACCEPTABLE_USE.md](docs/ACCEPTABLE_USE.md).
+The opening disclaimer must be accepted before the GUI, mobile UI, phone app,
+or Code Pilot starts.
+
 ## Editions
 
 | Capability | Community | Pro |

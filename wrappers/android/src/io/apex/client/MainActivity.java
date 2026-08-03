@@ -21,6 +21,14 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        if (!prefs.getBoolean(DisclaimerActivity.KEY_ACCEPTED, false)) {
+            startActivity(new Intent(this, DisclaimerActivity.class));
+            finish();
+            return;
+        }
+
         webView = new WebView(this);
         setContentView(webView);
 
@@ -57,12 +65,14 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        webView.loadUrl(getServerUrl(this));
+        if (webView != null) {
+            webView.loadUrl(getServerUrl(this));
+        }
     }
 
     @Override
     public void onBackPressed() {
-        if (webView.canGoBack()) {
+        if (webView != null && webView.canGoBack()) {
             webView.goBack();
         } else {
             super.onBackPressed();

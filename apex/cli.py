@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .analysis import ApexError, diff_indexes, inspect_apk
+from .disclaimer import require_disclaimer_acceptance
 from .edition import EditionError, Feature, require_feature
 from .version import __version__
 from .web import serve
@@ -230,6 +231,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "doctor":
             _print(doctor())
         elif args.command in {"gui", "serve"}:
+            require_disclaimer_acceptance()
             serve(
                 args.host,
                 args.port,
@@ -238,6 +240,7 @@ def main(argv: list[str] | None = None) -> int:
                 mobile=args.mobile,
             )
         elif args.command == "mobile":
+            require_disclaimer_acceptance()
             serve(
                 "0.0.0.0",
                 args.port,
@@ -280,6 +283,7 @@ def main(argv: list[str] | None = None) -> int:
 
             run_mcp_server()
         elif args.command in {"agent", "codepilot", "pilot"}:
+            require_disclaimer_acceptance()
             from .agent import run_code_pilot
             from .agent.providers import AgentError
 

@@ -42,8 +42,15 @@ input[type=file]{display:none}.pathbar{display:flex;gap:8px;margin-top:12px}.pat
 .pill{display:inline-block;padding:4px 9px;border-radius:20px;background:#1a2a43;margin:3px;color:#bed4ef}.finding{border-left:3px solid var(--red);padding:9px 12px;background:#21131b;margin:8px 0;border-radius:4px}.finding.low{border-color:#e7c65e}
 pre{white-space:pre-wrap;word-break:break-word;color:#b9c8dc;max-height:360px;overflow:auto}.empty{color:var(--muted)}.loader{width:24px;height:24px;border:3px solid #273954;border-top-color:var(--cyan);border-radius:50%;animation:spin .8s linear infinite;margin:auto}@keyframes spin{to{transform:rotate(360deg)}}
 footer{color:var(--muted);text-align:center;padding:34px}@media(max-width:800px){header{padding:0 16px;height:60px}.main-pad{padding:24px 16px}.hero,.columns{grid-template-columns:1fr}.grid{grid-template-columns:1fr 1fr}.tag{display:none}.pathbar.desktop-only{display:none}.mobile-only{display:block}.drop{min-height:180px;padding:20px}.lead{font-size:15px}.kv{grid-template-columns:1fr;gap:2px}}
+#disclaimer{position:fixed;inset:0;z-index:99;background:#070b13f2;display:flex;align-items:center;justify-content:center;padding:24px}
+#disclaimer .box{max-width:720px;max-height:90vh;overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:28px}
+#disclaimer h2{margin:0 0 8px;color:var(--cyan)}#disclaimer .sub{color:var(--muted);margin:0 0 16px;font-size:13px}
+#disclaimer .body{white-space:pre-wrap;line-height:1.55;color:var(--text);font-size:14px;margin-bottom:20px}
+#disclaimer .actions{display:flex;gap:10px;flex-wrap:wrap}
 </style></head>
-<body><header><div class="mark">A</div><div><div class="brand">APEX</div><div class="tag">ANDROID PACKAGE EXAMINER</div></div><div class="spacer"></div><div id="health" class="status">● Engine ready</div></header>
+<body>
+<div id="disclaimer"><div class="box"><h2>Acceptable Use Notice</h2><p class="sub">Science · Innovation · Education · Constructive creation</p><div class="body" id="disclaimerBody"></div><div class="actions"><button id="disclaimerAgree">I Agree — continue</button><button id="disclaimerDecline" class="secondary">Decline and exit</button></div></div></div>
+<header><div class="mark">A</div><div><div class="brand">APEX</div><div class="tag">ANDROID PACKAGE EXAMINER</div></div><div class="spacer"></div><div id="health" class="status">● Engine ready</div></header>
 <main class="main-pad">
 <section class="hero"><div><h1>Understand any APK.<br><span class="gradient">Before it understands you.</span></h1><p class="lead">Inspect manifests, permissions, resources, DEX classes, native libraries, and static security signals from one private local workspace.</p></div>
 <div><div id="drop" class="drop"><div><strong>Drop an APK here</strong><p class="mobile-only">Tap to pick an APK from your phone.</p><p class="desktop-only">Files stay on this machine.</p><label class="button" for="file">Choose APK</label><input id="file" type="file" accept=".apk,.zip,application/vnd.android.package-archive"></div></div><div class="pathbar desktop-only"><input id="path" placeholder="/path/to/application.apk"><button id="pathGo" class="secondary">Open path</button></div></div></section>
@@ -59,6 +66,22 @@ footer{color:var(--muted);text-align:center;padding:34px}@media(max-width:800px)
 <script>
 let currentPath="", currentData=null;
 const $=id=>document.getElementById(id), esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const DISCLAIMER_KEY="apex_disclaimer_v1";
+const DISCLAIMER_TEXT=`APEX is built for science, innovation, education, security research, defensive analysis, and constructive software engineering.
+
+Its reverse-engineering and rebuild capabilities are intentionally broad so legitimate researchers and creators are not artificially blocked.
+
+APEX must NOT be used to harm people, steal, defraud, stalk, harass, distribute malware, violate computer-crime laws, or otherwise cause unlawful damage. The authors and distributors do not authorize, encourage, or condone such use, and accept NO responsibility for how you use this program if you use it to cause harm.
+
+You alone are responsible for complying with applicable law. Misuse may result in civil legal action and, where applicable, criminal investigation and prosecution by the proper authorities. The authors and rights holders intend to pursue available civil remedies and to cooperate with law enforcement to the fullest extent permitted by law.
+
+Capability is unrestricted because this project prioritizes positive productivity and creation — not because harmful use is tolerated. Any attempt to use APEX outside that spirit may be pursued to the fullest extent of the law.
+
+By clicking I Agree, you confirm you have read this notice and will use APEX only in the spirit of education, research, and constructive innovation.`;
+$("disclaimerBody").textContent=DISCLAIMER_TEXT;
+if(localStorage.getItem(DISCLAIMER_KEY)==="1"){$("disclaimer").classList.add("hidden")}
+$("disclaimerAgree").onclick=()=>{localStorage.setItem(DISCLAIMER_KEY,"1");$("disclaimer").classList.add("hidden")};
+$("disclaimerDecline").onclick=()=>{document.body.innerHTML="<main style='padding:48px;text-align:center;color:#8fa1bb'><h1>Disclaimer declined</h1><p>APEX will not open without acceptance of the Acceptable Use Notice.</p></main>"};
 function busy(v){$("busy").classList.toggle("hidden",!v);if(v)$("results").classList.add("hidden")}
 function kv(k,v){return `<div class="kv"><span>${esc(k)}</span><span>${esc(v||"—")}</span></div>`}
 function pills(items){return items?.length?items.map(x=>`<span class="pill">${esc(x)}</span>`).join(""):'<span class="empty">None detected</span>'}

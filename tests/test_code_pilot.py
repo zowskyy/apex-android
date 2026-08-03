@@ -39,7 +39,8 @@ def test_code_pilot_heuristic_doctor(pro_license):
     assert "answer" in result
 
 
-def test_code_pilot_cli_help(pro_license):
+def test_code_pilot_cli_help(pro_license, monkeypatch):
+    monkeypatch.setenv("APEX_DISCLAIMER_ACCEPTED", "1")
     from apex.cli import main
 
     assert main(["agent"]) == 1
