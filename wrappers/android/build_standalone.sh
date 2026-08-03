@@ -30,6 +30,12 @@ fi
 
 mkdir -p "$HERE/dist"
 
+# Chaquopy reads src/main/python — symlink apex package only (not whole repo).
+PY_SRC="$STANDALONE/app/src/main/python"
+mkdir -p "$PY_SRC"
+rm -f "$PY_SRC/apex"
+ln -sfn "$ROOT/apex" "$PY_SRC/apex"
+
 if ! command -v python3.10 >/dev/null 2>&1; then
   echo "python3.10 is required for Chaquopy (must match app Python 3.10)." >&2
   echo "Install Python 3.10 or set buildPython in app/build.gradle." >&2
