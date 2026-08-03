@@ -758,8 +758,11 @@ def security_scan(apk_path: Path) -> dict[str, Any]:
     for item in scan_apk_dependencies(apk_path):
         findings.append(item)
 
-    order = {"low": 1, "medium": 2, "high": 3, "critical": 4, "info": 0}
-    highest = max((order[item["severity"]] for item in findings), default=0)
+    order = {"low": 1, "medium": 2, "high": 3, "critical": 4, "info": 0, "warn": 2}
+    highest = max(
+        (order.get(str(item.get("severity", "info")).lower(), 0) for item in findings),
+        default=0,
+    )
     verdict = "HIGH_RISK" if highest >= 3 else ("REVIEW" if findings else "CLEAN")
     return {
         "verdict": verdict,
