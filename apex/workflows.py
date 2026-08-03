@@ -237,9 +237,14 @@ def decompile_apk(
     out_dir: Path,
     mapping_path: Path | None = None,
     emit_smali: bool = True,
+    max_classes: int | None = None,
 ) -> dict[str, Any]:
     """Decompiler DEX files to Java, with readable Dalvik fallback files."""
+    from .device_profile import limits as device_limits
+
     apk_path, out_dir = Path(apk_path), Path(out_dir)
+    if max_classes is None:
+        max_classes = int(device_limits().get("max_decompile_classes", 50_000))
     java_dir, smali_dir = out_dir / "java", out_dir / "smali"
     java_dir.mkdir(parents=True, exist_ok=True)
     if emit_smali:
@@ -259,6 +264,14 @@ def decompile_apk(
                 continue
             index["dex_files"].append(dex_name)
             for cls in dex.get_classes():
+                if len(index["classes"]) >= max_classes:
+                    index["errors"].append(
+                        {
+                            "dex": dex_name,
+                            "error": f"decompile capped at {max_classes:,} classes for this device tier",
+                        }
+                    )
+                    break
                 descriptor = str(cls.get_name())
                 obfuscated = descriptor_to_java(descriptor)
                 display_name = mapping.get(obfuscated, obfuscated)
@@ -830,6 +843,8 @@ def doctor() -> dict[str, Any]:
         androguard_version = getattr(androguard, "__version__", "installed")
     except ImportError:
         androguard_version = None
+    from .device_profile import doctor_fields
+
     return {
         "apex": __version__,
         "edition": __import__("apex.edition", fromlist=["edition_info"]).edition_info(),
@@ -838,4 +853,5 @@ def doctor() -> dict[str, Any]:
         "native_dex": __import__("apex.analysis", fromlist=["_native_dex"])._native_dex is not None,
         "tools": tools,
         "ready": androguard_version is not None,
+        **doctor_fields(),
     }

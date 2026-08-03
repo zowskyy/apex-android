@@ -119,10 +119,23 @@ def build_parser() -> argparse.ArgumentParser:
 
     mobile_cmd = sub.add_parser(
         "mobile",
-        help="start the web UI for phone access on your local network",
+        help="companion mode: web UI on LAN for the thin phone client (analysis on this PC)",
     )
     mobile_cmd.add_argument("--port", type=int, default=8765)
     mobile_cmd.add_argument("--workspace", default=".apex-web")
+
+    standalone_cmd = sub.add_parser(
+        "standalone",
+        help="on-device engine mode (localhost only, adaptive limits — used inside the phone APK)",
+    )
+    standalone_cmd.add_argument("--port", type=int, default=8765)
+    standalone_cmd.add_argument("--workspace", default=".apex-standalone")
+    standalone_cmd.add_argument("--ram-mb", type=int, default=0, help="simulate device RAM for tier testing")
+    standalone_cmd.add_argument(
+        "--remote-enhanced",
+        action="store_true",
+        help="use remote-server limits profile (desktop connected as backend)",
+    )
 
     wrapper_cmd = sub.add_parser("wrapper", help="list or install platform app wrappers")
     wrapper_cmd.add_argument(
@@ -247,6 +260,24 @@ def main(argv: list[str] | None = None) -> int:
                 Path(args.workspace),
                 open_browser=False,
                 mobile=True,
+                engine_mode="remote_server",
+            )
+        elif args.command == "standalone":
+            require_disclaimer_acceptance()
+            from .device_profile import configure_device_profile
+
+            engine_mode = "remote_server" if args.remote_enhanced else "on_device"
+            configure_device_profile(
+                ram_mb=args.ram_mb,
+                engine_mode=engine_mode,
+            )
+            serve(
+                "127.0.0.1",
+                args.port,
+                Path(args.workspace),
+                open_browser=False,
+                standalone=True,
+                engine_mode=engine_mode,
             )
         elif args.command == "wrapper":
             from .wrappers_info import recommended_wrappers, run_install, wrapper_matrix

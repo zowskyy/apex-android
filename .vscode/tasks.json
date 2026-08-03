@@ -61,7 +61,46 @@
       }
     },
     {
-      "label": "APEX: Full project build",
+      "label": "APEX: Build standalone phone APK",
+      "type": "shell",
+      "command": "bash wrappers/android/build_standalone.sh",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "ANDROID_HOME": "${env:ANDROID_HOME}",
+          "ANDROID_SDK_ROOT": "${env:ANDROID_SDK_ROOT}"
+        }
+      },
+      "group": "build",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "APEX: Install standalone APK on phone (adb)",
+      "type": "shell",
+      "command": "ls -la wrappers/android/dist/apex-mobile.apk && adb install -r wrappers/android/dist/apex-mobile.apk",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "APEX: Build + install standalone phone APK",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "APEX: Build standalone phone APK",
+        "APEX: Install standalone APK on phone (adb)"
+      ],
+      "problemMatcher": [],
+      "group": "build"
+    },
       "type": "shell",
       "command": "bash build.sh --skip-tests --release",
       "options": {

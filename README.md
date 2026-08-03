@@ -51,18 +51,26 @@ To open the local interface:
 apex gui
 ```
 
-### Use on your phone (same Wi-Fi)
+### Use on your phone
 
-APEX runs on your computer; your phone uses it through the browser:
+**Standalone (recommended):** install **`apex-mobile.apk`** — the full APEX engine runs
+on your device (offline). Build with `bash wrappers/android/build_standalone.sh` or
+download from GitHub Actions **Android standalone APK**. See
+[wrappers/android/README.md](wrappers/android/README.md).
+
+**Companion mode:** run APEX on your computer and use the thin client or browser:
 
 ```bash
 apex mobile
 ```
 
 Open the printed URL (e.g. `http://192.168.1.42:8765`) on your phone, tap
-**Choose APK**, and pick any APK from your device. Analysis stays on your PC.
+**Choose APK**, and pick any APK from your device. Analysis runs on your PC.
 
-The server binds to `127.0.0.1:8765` by default for local-only use. Uploaded
+On-device performance scales with your phone (RAM/CPU tiers). Connect a desktop
+server in the mobile app **Settings** when you want extra throughput.
+
+The desktop server binds to `127.0.0.1:8765` by default for local-only use. Uploaded
 APKs and generated source remain in the configured local workspace.
 
 ### App wrappers (all platforms)
@@ -72,7 +80,7 @@ APKs and generated source remain in the configured local workspace.
 | Windows | `wrappers\windows\apex-gui.bat` · `apex-mobile.bat` |
 | macOS | `wrappers/macos/apex-gui.command` · build `.app` with `create-apps.sh` |
 | Linux | `wrappers/linux/apex-gui.sh` · desktop entries via `install.sh` |
-| Android phone | Client APK: [wrappers/android/README.md](wrappers/android/README.md) (VS Code tasks + GitHub artifact) |
+| Android phone | **Standalone:** `apex-mobile.apk` · **Companion:** `apex-client.apk` — [wrappers/android/README.md](wrappers/android/README.md) |
 | iOS | Safari + Add to Home Screen ([wrappers/ios/README.md](wrappers/ios/README.md)) |
 | Docker | `wrappers/docker/run.sh` |
 

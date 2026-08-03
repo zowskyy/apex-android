@@ -15,6 +15,8 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from .analysis import ApexError, dex_metadata, inspect_apk, sanitized_zip_name
+from .device_profile import doctor_fields
+from .device_profile import limits as device_limits
 from .workflows import decompile_apk, doctor, security_scan
 
 WEB_APP = r"""<!doctype html>
@@ -64,7 +66,7 @@ footer{color:var(--muted);text-align:center;padding:34px}@media(max-width:800px)
 <div class="panel" style="margin-top:14px"><h2>Code Pilot</h2><p class="tag" style="margin:0 0 10px">Describe what you want — Code Pilot runs APEX tools for you (Pro).</p><div id="pilotLog" style="max-height:220px;overflow:auto;margin-bottom:10px;color:#b9c8dc"></div><div class="pathbar"><input id="pilotPrompt" placeholder="e.g. security-scan this APK and summarize risks"><button id="pilotGo">Ask</button></div></div>
 </section></main><footer>APEX runs locally · Static analysis is not a malware verdict</footer>
 <script>
-let currentPath="", currentData=null;
+let currentPath="", currentData=null, classDisplayLimit=300;
 const $=id=>document.getElementById(id), esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const DISCLAIMER_KEY="apex_disclaimer_v1";
 const DISCLAIMER_TEXT=`APEX is built for science, innovation, education, security research, defensive analysis, and constructive software engineering.
@@ -85,7 +87,7 @@ $("disclaimerDecline").onclick=()=>{document.body.innerHTML="<main style='paddin
 function busy(v){$("busy").classList.toggle("hidden",!v);if(v)$("results").classList.add("hidden")}
 function kv(k,v){return `<div class="kv"><span>${esc(k)}</span><span>${esc(v||"—")}</span></div>`}
 function pills(items){return items?.length?items.map(x=>`<span class="pill">${esc(x)}</span>`).join(""):'<span class="empty">None detected</span>'}
-function renderClasses(query=""){const d=currentData?.dex||{},q=query.toLowerCase(),methods=d.methods||[],classes=(d.classes||[]).filter(c=>!q||c.name.toLowerCase().includes(q)||methods.some(m=>m.class===c.name&&(m.name+m.descriptor).toLowerCase().includes(q)));$("classList").innerHTML=classes.slice(0,300).map(c=>{const classMatches=!q||c.name.toLowerCase().includes(q),ms=methods.filter(m=>m.class===c.name&&(classMatches||(m.name+m.descriptor).toLowerCase().includes(q)));return `<details><summary><code>${esc(c.name)}</code> <span class="tag">${esc(c.access||"")}</span></summary>${ms.map(m=>`<div class="kv"><span>${esc(m.access)}</span><code>${esc(m.name+m.descriptor)}</code></div>`).join("")||'<div class="empty">No matching methods</div>'}</details>`}).join("")||'<span class="empty">No matching DEX classes.</span>'}
+function renderClasses(query=""){const d=currentData?.dex||{},q=query.toLowerCase(),methods=d.methods||[],classes=(d.classes||[]).filter(c=>!q||c.name.toLowerCase().includes(q)||methods.some(m=>m.class===c.name&&(m.name+m.descriptor).toLowerCase().includes(q)));$("classList").innerHTML=classes.slice(0,classDisplayLimit).map(c=>{const classMatches=!q||c.name.toLowerCase().includes(q),ms=methods.filter(m=>m.class===c.name&&(classMatches||(m.name+m.descriptor).toLowerCase().includes(q)));return `<details><summary><code>${esc(c.name)}</code> <span class="tag">${esc(c.access||"")}</span></summary>${ms.map(m=>`<div class="kv"><span>${esc(m.access)}</span><code>${esc(m.name+m.descriptor)}</code></div>`).join("")||'<div class="empty">No matching methods</div>'}</details>`}).join("")||'<span class="empty">No matching DEX classes.</span>'}
 function render(data){const i=data.inspect,s=data.security,m=i.manifest||{};currentPath=data.path;currentData=data;$("results").classList.remove("hidden");
 $("filename").textContent=i.path.split(/[\\/]/).pop();$("hash").textContent=i.sha256;$("entries").textContent=i.entry_count;$("dex").textContent=(data.dex?.classes||[]).length;$("perms").textContent=(m.permissions||[]).length;$("risk").textContent=s.verdict;
 $("identity").innerHTML=kv("Package",m.package)+kv("Version",`${m.version_name||"?"} (${m.version_code||"?"})`)+kv("SDK",`min ${m.min_sdk||"?"} · target ${m.target_sdk||"?"}`)+kv("Main activity",m.main_activity);
@@ -99,7 +101,22 @@ $("classGo").onclick=()=>renderClasses($("classSearch").value);$("classSearch").
 const drop=$("drop");["dragenter","dragover"].forEach(n=>drop.addEventListener(n,e=>{e.preventDefault();drop.classList.add("drag")}));["dragleave","drop"].forEach(n=>drop.addEventListener(n,e=>{e.preventDefault();drop.classList.remove("drag")}));drop.addEventListener("drop",e=>upload(e.dataTransfer.files[0]));
 $("decompile").onclick=async()=>{if(!currentPath)return;const r=await fetch("/api/decompile",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({path:currentPath})});const d=await r.json();alert(r.ok?`Decompiled ${d.class_count} classes to ${d.output}`:d.error)};
 $("pilotGo").onclick=async()=>{const prompt=$("pilotPrompt").value.trim();if(!prompt)return;const log=$("pilotLog");log.innerHTML+=`<div class="kv"><span>You</span><span>${esc(prompt)}</span></div>`;$("pilotPrompt").value="";try{const r=await fetch("/api/agent",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt,path:currentPath||null,provider:"heuristic"})});const d=await r.json();if(!r.ok)throw Error(d.error||"Code Pilot failed");log.innerHTML+=`<div class="kv"><span>Pilot</span><span>${esc(d.answer)}</span></div>`;log.scrollTop=log.scrollHeight}catch(e){log.innerHTML+=`<div class="finding">${esc(e.message)}</div>`}};
-fetch("/api/health").then(r=>r.json()).then(d=>$("health").textContent=d.ready?"● Engine ready":"● Setup required").catch(()=>$("health").textContent="● Engine unavailable");
+fetch("/api/health").then(r=>r.json()).then(d=>{
+  $("health").textContent=d.ready?"● Engine ready":"● Setup required";
+  if(d.class_display_limit)classDisplayLimit=d.class_display_limit;
+  if(d.engine_mode==="on_device"){
+    const lead=document.querySelector(".lead");
+    if(lead)lead.textContent="Full APK analysis on this device — inspect, scan, decompile, and Code Pilot offline. Connect a desktop server in the app Settings for extra throughput.";
+    const mobile=document.querySelector(".drop .mobile-only");
+    if(mobile)mobile.textContent="Tap to pick an APK — analysis stays on your phone.";
+    const desk=document.querySelector(".drop .desktop-only");
+    if(desk)desk.textContent="Files stay on this device.";
+    if(d.performance_note)$("health").textContent="● "+d.performance_note;
+  }else if(d.engine_mode==="remote_server"){
+    const lead=document.querySelector(".lead");
+    if(lead)lead.textContent="Connected remote engine — analysis runs on your desktop/server for maximum performance.";
+  }
+}).catch(()=>$("health").textContent="● Engine unavailable");
 </script></body></html>"""
 
 
@@ -115,11 +132,35 @@ class ApexWebHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _body(self, maximum: int = 512 * 1024 * 1024) -> bytes:
+    def _body(self, maximum: int | None = None) -> bytes:
+        if maximum is None:
+            maximum = int(getattr(self.server, "upload_max", 512 * 1024 * 1024))
         length = int(self.headers.get("Content-Length", "0"))
         if length > maximum:
             raise ApexError(f"request is larger than the {maximum // (1024 * 1024)} MiB limit")
         return self.rfile.read(length)
+
+    def _cap_dex(self, dex: dict) -> dict:
+        cap = int(getattr(self.server, "dex_class_cap", 0) or 0)
+        if cap <= 0 or len(dex.get("classes", [])) <= cap:
+            return dex
+        trimmed = dict(dex)
+        trimmed["classes"] = dex["classes"][:cap]
+        class_names = {item["name"] for item in trimmed["classes"]}
+        trimmed["methods"] = [m for m in dex.get("methods", []) if m.get("class") in class_names]
+        trimmed["edges"] = [
+            e
+            for e in dex.get("edges", [])
+            if e.get("caller_class") in class_names or e.get("callee_class") in class_names
+        ]
+        trimmed["errors"] = list(dex.get("errors", []))
+        trimmed["errors"].append(
+            {
+                "dex": "*",
+                "error": f"DEX explorer capped at {cap:,} classes for this device tier",
+            }
+        )
+        return trimmed
 
     def _payload(self) -> dict:
         try:
@@ -144,6 +185,7 @@ class ApexWebHandler(BaseHTTPRequestHandler):
                         dex[key].extend(metadata[key])
                 except Exception as exc:
                     dex["errors"].append({"dex": name, "error": str(exc)})
+        dex = self._cap_dex(dex)
         return {
             "path": str(resolved),
             "inspect": inspect_apk(resolved),
@@ -247,16 +289,31 @@ def serve(
     workspace: Path | None = None,
     open_browser: bool = True,
     mobile: bool = False,
+    standalone: bool = False,
+    engine_mode: str = "desktop",
 ) -> None:
-    if mobile:
+    if standalone:
+        mobile = False
+        host = "127.0.0.1"
+        open_browser = False
+    elif mobile:
         host = "0.0.0.0"
         open_browser = False
 
     workspace = workspace or Path(tempfile.gettempdir()) / "apex-web"
+    profile = device_limits()
     server = ThreadingHTTPServer((host, port), ApexWebHandler)
     server.workspace = str(workspace)  # type: ignore[attr-defined]
+    server.upload_max = int(profile.get("max_upload_bytes", 512 * 1024 * 1024))  # type: ignore[attr-defined]
+    server.dex_class_cap = int(profile.get("dex_class_cap", 0) or 0)  # type: ignore[attr-defined]
+    server.engine_mode = engine_mode  # type: ignore[attr-defined]
 
-    if host == "0.0.0.0":
+    if standalone:
+        print("APEX standalone mode — full engine on this device:")
+        print(f"  http://127.0.0.1:{port}")
+        print(f"  Tier: {profile.get('tier', 'on_device')} · workspace: {workspace}")
+        print(doctor_fields().get("performance_note", ""))
+    elif host == "0.0.0.0":
         phone_url = f"http://{lan_ip()}:{port}"
         print("APEX mobile mode — open this URL on your phone (same Wi-Fi):")
         print(f"  {phone_url}")

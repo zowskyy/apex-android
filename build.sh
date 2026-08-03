@@ -5,6 +5,7 @@
 #   ./build.sh                 # dev install + native extensions + tests
 #   ./build.sh --release       # same, optimized Rust builds
 #   ./build.sh --android       # also build Android client APK (needs SDK)
+  ./build.sh --android-standalone  # full on-device phone APK (Gradle + Chaquopy)
 #   ./build.sh --macos-apps    # also build macOS .app bundles (macOS only)
 #   ./build.sh --docker        # also build Docker image
 #   ./build.sh --skip-tests    # skip cargo test, ruff, and pytest
@@ -21,6 +22,7 @@ PIP="$VENV/bin/pip"
 MATURIN="$VENV/bin/maturin"
 RUST_PROFILE="dev"
 DO_ANDROID=0
+DO_ANDROID_STANDALONE=0
 DO_MACOS_APPS=0
 DO_DOCKER=0
 SKIP_TESTS=0
@@ -33,6 +35,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --release) RUST_PROFILE="release" ;;
     --android) DO_ANDROID=1 ;;
+    --android-standalone) DO_ANDROID_STANDALONE=1 ;;
     --macos-apps) DO_MACOS_APPS=1 ;;
     --docker) DO_DOCKER=1 ;;
     --skip-tests) SKIP_TESTS=1 ;;
@@ -109,6 +112,7 @@ if [[ "$DO_MACOS_APPS" -eq 1 ]]; then
 fi
 
 ANDROID_APK="$ROOT/wrappers/android/dist/apex-client.apk"
+MOBILE_APK="$ROOT/wrappers/android/dist/apex-mobile.apk"
 if [[ "$DO_ANDROID" -eq 1 ]]; then
   step "Android client APK"
   ensure_android_sdk
@@ -118,6 +122,18 @@ if [[ "$DO_ANDROID" -eq 1 ]]; then
     exit 1
   fi
   ls -la "$ANDROID_APK"
+fi
+
+if [[ "$DO_ANDROID_STANDALONE" -eq 1 ]]; then
+  step "Android standalone APK (on-device engine)"
+  ensure_android_sdk
+  chmod +x wrappers/android/build_standalone.sh
+  bash wrappers/android/build_standalone.sh
+  if [[ ! -f "$MOBILE_APK" ]]; then
+    echo "Standalone build finished but APK missing: $MOBILE_APK" >&2
+    exit 1
+  fi
+  ls -la "$MOBILE_APK"
 fi
 
 if [[ "$DO_DOCKER" -eq 1 ]]; then
@@ -137,8 +153,12 @@ echo "  $VENV/bin/apex gui"
 echo "  $VENV/bin/apex mobile          # phone browser on LAN"
 echo "  wrappers/README.md             # platform app wrappers"
 if [[ -f "$ANDROID_APK" ]]; then
-  echo "  $ANDROID_APK"
-  echo "  adb install -r $ANDROID_APK  # confirm timestamp above before installing"
+  echo "  $ANDROID_APK                 # thin companion client"
+  echo "  adb install -r $ANDROID_APK"
+fi
+if [[ -f "$MOBILE_APK" ]]; then
+  echo "  $MOBILE_APK                  # full on-device engine"
+  echo "  adb install -r $MOBILE_APK"
 fi
 if [[ -d wrappers/macos/dist ]]; then
   echo "  wrappers/macos/dist/APEX.app"

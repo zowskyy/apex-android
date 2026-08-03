@@ -17,6 +17,7 @@ def test_wrapper_files_exist():
         "wrappers/macos/apex-mobile.command",
         "wrappers/docker/docker-compose.yml",
         "wrappers/android/build.sh",
+        "wrappers/android/build_standalone.sh",
         "scripts/validate_slice.sh",
         "scripts/check_github_ci.sh",
         ".cursor/skills/finished-product-delivery/SKILL.md",

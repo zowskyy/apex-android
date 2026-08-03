@@ -59,8 +59,13 @@ def wrapper_matrix() -> dict[str, dict[str, str]]:
         },
         "android_client_apk": {
             "platform": "Android",
-            "use": "WebView shell (build with wrappers/android/build.sh)",
+            "use": "Thin companion WebView (PC runs analysis)",
             "path": str(root / "wrappers/android/dist/apex-client.apk"),
+        },
+        "android_standalone_apk": {
+            "platform": "Android",
+            "use": "Full on-device engine APK (offline analysis)",
+            "path": str(root / "wrappers/android/dist/apex-mobile.apk"),
         },
         "ios_guide": {
             "platform": "iOS",
