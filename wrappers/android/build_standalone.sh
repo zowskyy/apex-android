@@ -54,6 +54,10 @@ fi
 
 ./gradlew clean assembleRelease --no-daemon
 
+echo "==> Chaquopy import smoke test (same env as on-device engine)"
+chmod +x "$ROOT/scripts/smoke_android_engine_imports.sh"
+bash "$ROOT/scripts/smoke_android_engine_imports.sh"
+
 BUILT="$STANDALONE/app/build/outputs/apk/release/app-release.apk"
 if [[ ! -f "$BUILT" ]]; then
   echo "Expected APK missing: $BUILT" >&2

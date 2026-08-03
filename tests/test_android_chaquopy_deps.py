@@ -1,4 +1,10 @@
-"""Guard Chaquopy pip manifest — missing transitive deps break on-device import."""
+"""Guard Chaquopy pip manifest and document the desktop-vs-Android test gap.
+
+Desktop CI runs pytest with pip install -e ".[dev]" which pulls full transitive
+deps automatically. The Android APK uses Chaquopy pip with --no-deps, so missing
+packages only show up at runtime unless scripts/smoke_android_engine_imports.sh
+runs after assembleRelease (wired into build_standalone.sh + CI).
+"""
 
 from pathlib import Path
 
