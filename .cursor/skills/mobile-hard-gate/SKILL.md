@@ -90,7 +90,7 @@ Record the green run URL in PR / handoff notes.
 Automated audit:
 
 ```bash
-bash scripts/audit_mobile_hard_gate.sh v0.4.4   # or latest release tag
+bash scripts/audit_mobile_hard_gate.sh v0.4.5   # or latest release tag
 ```
 
 Exit code `0` = automated gates pass; **MANUAL** lines still require a real device.

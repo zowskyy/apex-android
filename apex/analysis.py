@@ -97,11 +97,16 @@ def _nested_apk_entries(names: list[str]) -> list[str]:
 
 
 def _pick_nested_apk(archive: zipfile.ZipFile, candidates: list[str]) -> str:
-    for prefer in ("base.apk", "master.apk", "main.apk"):
+    """Prefer APEX release APKs, then common split/base names, then largest APK."""
+    lowered = {c: Path(c).name.lower() for c in candidates}
+    for needle in ("apex-mobile", "base.apk", "master.apk", "main.apk"):
         for candidate in candidates:
-            if Path(candidate).name.lower() == prefer:
+            name = lowered[candidate]
+            if needle in name and name.endswith(".apk"):
                 return candidate
-    return max(candidates, key=lambda name: archive.getinfo(name).file_size)
+    apk_only = [c for c in candidates if lowered[c].endswith(".apk")]
+    pool = apk_only if apk_only else candidates
+    return max(pool, key=lambda name: archive.getinfo(name).file_size)
 
 
 def resolve_android_package(path: Path, workspace: Path | None = None) -> tuple[Path, dict[str, Any]]:

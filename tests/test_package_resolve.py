@@ -43,3 +43,16 @@ def test_resolve_plain_zip_without_apk(tmp_path: Path) -> None:
     assert resolved == plain
     assert not package_has_dex(resolved)
     assert "No DEX" in meta["container_note"]
+
+
+def test_resolve_github_release_android_zip(sample_apk: Path, tmp_path: Path) -> None:
+    """Release bundle uses zip -j (flat APK + INSTALL.txt at archive root)."""
+    container = tmp_path / "APEX-Mobile-0.4.5-android.zip"
+    with zipfile.ZipFile(container, "w") as outer:
+        outer.write(sample_apk, "APEX-Mobile-0.4.5.apk")
+        outer.writestr("INSTALL.txt", "install notes")
+
+    resolved, meta = resolve_android_package(container, tmp_path)
+    assert meta["resolved_from"] == "APEX-Mobile-0.4.5.apk"
+    assert package_has_dex(resolved)
+    assert "APEX-Mobile-0.4.5.apk" in meta["container_note"]

@@ -130,8 +130,7 @@ public class MainActivity extends Activity {
                 }
                 pendingFileCallback = callback;
 
-                Intent intent = params.createIntent();
-                intent.addCategory(Intent.CATEGORY_OPENABLE);
+                Intent intent = buildPackagePickerIntent();
                 try {
                     startActivityForResult(
                             Intent.createChooser(intent, getString(R.string.choose_apk)),
@@ -179,6 +178,25 @@ public class MainActivity extends Activity {
         } else {
             startService(service);
         }
+    }
+
+    private Intent buildPackagePickerIntent() {
+        // Do not use FileChooserParams.createIntent() alone — HTML accept= often grays out
+        // .apk on Samsung/Android while leaving .zip selectable.
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        intent.putExtra(
+                Intent.EXTRA_MIME_TYPES,
+                new String[] {
+                    "application/vnd.android.package-archive",
+                    "application/zip",
+                    "application/x-zip-compressed",
+                    "application/octet-stream",
+                    "*/*",
+                }
+        );
+        return intent;
     }
 
     private void setStatus(String message) {

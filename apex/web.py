@@ -61,7 +61,7 @@ footer{color:var(--muted);text-align:center;padding:34px}@media(max-width:800px)
 <header><div class="mark">A</div><div><div class="brand">APEX</div><div class="tag">ANDROID PACKAGE EXAMINER</div></div><div class="spacer"></div><div id="health" class="status">● Engine ready</div></header>
 <main class="main-pad">
 <section class="hero"><div><h1>Understand any APK.<br><span class="gradient">Before it understands you.</span></h1><p class="lead">Inspect manifests, permissions, resources, DEX classes, native libraries, and static security signals from one private local workspace.</p></div>
-<div><div id="drop" class="drop"><div><strong>Drop an APK here</strong><p class="mobile-only">Tap to pick an APK from your phone.</p><p class="desktop-only">Files stay on this machine.</p><label class="button" for="file">Choose APK</label><input id="file" type="file" accept=".apk,.zip,application/vnd.android.package-archive"></div></div><div class="pathbar desktop-only"><input id="path" placeholder="/path/to/application.apk"><button id="pathGo" class="secondary">Open path</button></div></div></section>
+<div><div id="drop" class="drop"><div><strong>Drop an APK here</strong><p class="mobile-only">Tap to pick an APK from your phone.</p><p class="desktop-only">Files stay on this machine.</p><label class="button" for="file">Choose APK</label><input id="file" type="file"></div></div><div class="pathbar desktop-only"><input id="path" placeholder="/path/to/application.apk"><button id="pathGo" class="secondary">Open path</button></div></div></section>
 <section id="busy" class="panel hidden"><div class="loader"></div><p style="text-align:center;color:var(--muted)">Analyzing package structure and security signals…</p></section>
 <section id="results" class="hidden">
 <div style="display:flex;align-items:center;gap:12px"><div><h2 id="filename" style="font-size:22px;margin:0"></h2><div id="hash" class="tag"></div></div><div class="spacer"></div><button id="decompile" class="secondary">Decompile Java</button></div>
@@ -119,7 +119,7 @@ fetch("/api/health").then(r=>r.json()).then(d=>{
     const lead=document.querySelector(".lead");
     if(lead)lead.textContent="Full APK analysis on this device — inspect, scan, decompile, and Code Pilot offline. Connect a desktop server in the app Settings for extra throughput.";
     const mobile=document.querySelector(".drop .mobile-only");
-    if(mobile)mobile.textContent="Tap to pick an APK — analysis stays on your phone.";
+    if(mobile)mobile.textContent="Tap to pick an APK or APEX-Mobile release ZIP — analysis stays on your phone.";
     const desk=document.querySelector(".drop .desktop-only");
     if(desk)desk.textContent="Files stay on this device.";
     if(d.performance_note)$("health").textContent="● "+d.performance_note;
