@@ -13,6 +13,7 @@ cp -r .cursor/skills/finished-product-delivery ~/.cursor/skills/
 cp -r .cursor/skills/mobile-hard-gate ~/.cursor/skills/
 cp -r .cursor/skills/hard-gate ~/.cursor/skills/
 cp -r .cursor/skills/system-architect-audit ~/.cursor/skills/
+cp -r .cursor/skills/universal-arc-engine ~/.cursor/skills/
 ```
 
 Or symlink:
@@ -22,6 +23,7 @@ ln -sf "$(pwd)/.cursor/skills/finished-product-delivery" ~/.cursor/skills/
 ln -sf "$(pwd)/.cursor/skills/mobile-hard-gate" ~/.cursor/skills/
 ln -sf "$(pwd)/.cursor/skills/hard-gate" ~/.cursor/skills/
 ln -sf "$(pwd)/.cursor/skills/system-architect-audit" ~/.cursor/skills/
+ln -sf "$(pwd)/.cursor/skills/universal-arc-engine" ~/.cursor/skills/
 ```
 
 ### Claude Code
@@ -38,6 +40,7 @@ Point agents at the repo copy:
 .cursor/skills/finished-product-delivery/SKILL.md
 .cursor/skills/mobile-hard-gate/SKILL.md   # Android/mobile hard gate before APK handoff
 .cursor/skills/system-architect-audit/SKILL.md  # Audit reviewing releases/PRs/architecture
+.cursor/skills/universal-arc-engine/SKILL.md  # ARC 8-phase audit (any subject)
 ```
 
 Project-specific rules live in `AGENTS.md` and `docs/PRINCIPLES.md`.
@@ -50,6 +53,7 @@ Project-specific rules live in `AGENTS.md` and `docs/PRINCIPLES.md`.
 | `mobile-hard-gate` | Mobile APK, WebView shells, Chaquopy, store/Releases |
 | `hard-gate` | 9-slice Phase 1–3 + ship (`scripts/hard_gate.sh`) |
 | `system-architect-audit` | Audit reviewing commits/PRs — version, gates, CI, ops readiness |
+| `universal-arc-engine` | ARC 8-phase audit on any subject — Golden Triad + CoF severity |
 
 ## What it covers
 

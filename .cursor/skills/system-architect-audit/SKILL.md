@@ -224,9 +224,9 @@ record a **start-to-finish video** showing the system working as documented.
 
 ### Recording
 
-- Use screen recording (Cursor `RecordScreen` or local capture)
-- Save as `apex-demo-vX.Y.Z` — provide MP4 for broad compatibility
-- Narrate or subtitle key steps so a new engineer can follow without the doc
+- **Terminal-first** — record `bash scripts/arc_demo_terminal.sh` in a full-screen terminal (not browser-only).
+- Save as MP4: `arc-demo-{version}.mp4` — MP4 for universal playback.
+- User must see every CLI step and output without cropped browser chrome.
 
 ### When to skip
 

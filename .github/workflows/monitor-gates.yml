@@ -18,16 +18,32 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Check gate failure rate from audit log
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Gate health + audit failure rate
         run: |
-          pip install -e .
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install --upgrade pip wheel maturin
+          pip install -e ".[dev]"
+          maturin develop --release -m core/zip_reader/Cargo.toml
+          maturin develop --release -m core/dex_reader/Cargo.toml
+          python scripts/generate_test_apk.py tests/fixtures/sample_test.apk
+          echo "==> Sample APK gate (must pass)"
+          apex gate tests/fixtures/sample_test.apk --msv 21 --stage candidate --ci
           python <<'PY'
           import os
           from apex.gate.audit_log import AuditLogger
 
-          rate = AuditLogger().failure_rate()
-          threshold = float(os.environ.get("APEX_GATE_FAILURE_THRESHOLD", "0.05"))
-          print(f"recent failure rate: {rate:.2%} (threshold {threshold:.0%})")
-          if rate > threshold:
-              raise SystemExit(f"gate failure rate {rate:.2%} exceeds {threshold:.0%}")
+          logger = AuditLogger()
+          ok, msg = logger.verify_integrity()
+          print(f"audit integrity: {msg}")
+          if not logger.log_path.is_file():
+              print("audit log empty on runner — skipping failure-rate alert")
+          else:
+              rate = logger.failure_rate()
+              threshold = float(os.environ.get("APEX_GATE_FAILURE_THRESHOLD", "0.05"))
+              print(f"recent failure rate: {rate:.2%} (threshold {threshold:.0%})")
+              if rate > threshold:
+                  raise SystemExit(f"gate failure rate {rate:.2%} exceeds {threshold:.0%}")
           PY
