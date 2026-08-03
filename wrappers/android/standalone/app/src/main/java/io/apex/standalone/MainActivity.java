@@ -1,17 +1,25 @@
 package io.apex.standalone;
 
+import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
+import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.Toast;
+import android.widget.LinearLayout;
+import android.widget.ProgressBar;
+import android.widget.TextView;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -19,7 +27,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 
 /**
- * Full-stack APEX on the phone: embedded engine by default, optional remote desktop backend.
+ * APEX Mobile — on-device engine by default, optional desktop remote for extra power.
  */
 public class MainActivity extends Activity {
     static final String PREFS = "apex_standalone";
@@ -29,7 +37,14 @@ public class MainActivity extends Activity {
     static final String MODE_REMOTE = "remote";
     static final String LOCAL_URL = "http://127.0.0.1:" + ApexEngineService.PORT;
 
+    private static final int PERM_NOTIFICATIONS = 1001;
+    private static final int MAX_WAIT_ATTEMPTS = 360; // 3 minutes
+
     private WebView webView;
+    private TextView statusText;
+    private ProgressBar progressBar;
+    private LinearLayout loadingPanel;
+    private volatile boolean uiReady = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -42,40 +57,86 @@ public class MainActivity extends Activity {
             return;
         }
 
-        webView = new WebView(this);
-        setContentView(webView);
-
-        WebSettings settings = webView.getSettings();
-        settings.setJavaScriptEnabled(true);
-        settings.setDomStorageEnabled(true);
-        settings.setBuiltInZoomControls(true);
-        settings.setDisplayZoomControls(false);
-
-        webView.setWebViewClient(new WebViewClient());
+        requestRuntimePermissions();
+        buildUi();
 
         if (isOnDeviceMode(this)) {
-            Toast.makeText(this, R.string.engine_starting, Toast.LENGTH_SHORT).show();
-            Intent service = new Intent(this, ApexEngineService.class);
-            service.setAction(ApexEngineService.ACTION_START);
-            service.putExtra(ApexEngineService.EXTRA_REMOTE_ENHANCED, false);
-            startEngineService(service);
+            startLocalEngine();
             waitForLocalEngine(LOCAL_URL);
         } else {
             connectRemote(getRemoteUrl(this));
         }
     }
 
-    private void connectRemote(final String url) {
-        new Thread(() -> {
-            final boolean ok = pingHealth(url);
-            runOnUiThread(() -> {
-                if (ok) {
-                    webView.loadUrl(url);
-                } else {
-                    EngineHelp.showRemoteFailed(webView, url);
-                }
-            });
-        }).start();
+    private void buildUi() {
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(Color.parseColor("#070b13"));
+
+        loadingPanel = new LinearLayout(this);
+        loadingPanel.setOrientation(LinearLayout.VERTICAL);
+        loadingPanel.setGravity(Gravity.CENTER);
+        loadingPanel.setPadding(dp(24), dp(32), dp(24), dp(16));
+
+        TextView brand = new TextView(this);
+        brand.setText(R.string.app_name);
+        brand.setTextColor(Color.parseColor("#63e6ff"));
+        brand.setTextSize(TypedValue.COMPLEX_UNIT_SP, 28);
+        brand.setGravity(Gravity.CENTER);
+        loadingPanel.addView(brand);
+
+        progressBar = new ProgressBar(this);
+        LinearLayout.LayoutParams progressLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        progressLp.topMargin = dp(24);
+        progressBar.setLayoutParams(progressLp);
+        loadingPanel.addView(progressBar);
+
+        statusText = new TextView(this);
+        statusText.setTextColor(Color.parseColor("#8fa1bb"));
+        statusText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        statusText.setGravity(Gravity.CENTER);
+        statusText.setPadding(0, dp(16), 0, 0);
+        statusText.setText(getString(R.string.engine_starting));
+        loadingPanel.addView(statusText);
+
+        webView = new WebView(this);
+        webView.setVisibility(View.GONE);
+        WebSettings settings = webView.getSettings();
+        settings.setJavaScriptEnabled(true);
+        settings.setDomStorageEnabled(true);
+        settings.setBuiltInZoomControls(true);
+        settings.setDisplayZoomControls(false);
+        webView.setWebViewClient(new WebViewClient());
+
+        LinearLayout.LayoutParams webLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+        );
+        webView.setLayoutParams(webLp);
+
+        root.addView(loadingPanel);
+        root.addView(webView);
+        setContentView(root);
+    }
+
+    private void requestRuntimePermissions() {
+        if (Build.VERSION.SDK_INT >= 33) {
+            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, PERM_NOTIFICATIONS);
+            }
+        }
+    }
+
+    private void startLocalEngine() {
+        Intent service = new Intent(this, ApexEngineService.class);
+        service.setAction(ApexEngineService.ACTION_START);
+        service.putExtra(ApexEngineService.EXTRA_REMOTE_ENHANCED, false);
+        startEngineService(service);
     }
 
     private void startEngineService(Intent service) {
@@ -84,6 +145,19 @@ public class MainActivity extends Activity {
         } else {
             startService(service);
         }
+    }
+
+    private void setStatus(String message) {
+        if (statusText != null) {
+            statusText.setText(message);
+        }
+    }
+
+    private void showWebUi(String url) {
+        uiReady = true;
+        loadingPanel.setVisibility(View.GONE);
+        webView.setVisibility(View.VISIBLE);
+        webView.loadUrl(url);
     }
 
     static boolean isOnDeviceMode(Context context) {
@@ -98,11 +172,27 @@ public class MainActivity extends Activity {
 
     private void waitForLocalEngine(final String url) {
         new Thread(() -> {
-            boolean ready = false;
-            for (int attempt = 0; attempt < 120; attempt++) {
+            for (int attempt = 0; attempt < MAX_WAIT_ATTEMPTS; attempt++) {
+                EngineState.Phase phase = EngineState.getPhase();
+                if (phase == EngineState.Phase.FAILED) {
+                    runOnUiThread(() -> {
+                        setStatus(EngineState.getError());
+                        EngineHelp.showEngineFailed(webView, EngineState.getError());
+                        loadingPanel.setVisibility(View.GONE);
+                        webView.setVisibility(View.VISIBLE);
+                    });
+                    return;
+                }
+                if (attempt < 5) {
+                    postStatus(getString(R.string.engine_starting));
+                } else if (attempt < 40) {
+                    postStatus(getString(R.string.engine_loading_modules));
+                } else {
+                    postStatus(getString(R.string.engine_first_launch_hint));
+                }
                 if (pingHealth(url)) {
-                    ready = true;
-                    break;
+                    runOnUiThread(() -> showWebUi(url));
+                    return;
                 }
                 try {
                     Thread.sleep(500);
@@ -110,13 +200,37 @@ public class MainActivity extends Activity {
                     break;
                 }
             }
-            final boolean ok = ready;
             runOnUiThread(() -> {
-                if (ok) {
-                    webView.loadUrl(url);
-                } else {
-                    EngineHelp.showEngineFailed(webView);
+                setStatus(getString(R.string.engine_timeout));
+                EngineHelp.showEngineFailed(webView, getString(R.string.engine_timeout));
+                loadingPanel.setVisibility(View.GONE);
+                webView.setVisibility(View.VISIBLE);
+            });
+        }).start();
+    }
+
+    private void postStatus(final String message) {
+        runOnUiThread(() -> setStatus(message));
+    }
+
+    private void connectRemote(final String url) {
+        postStatus(getString(R.string.remote_connecting));
+        new Thread(() -> {
+            for (int attempt = 0; attempt < 24; attempt++) {
+                if (pingHealth(url)) {
+                    runOnUiThread(() -> showWebUi(url));
+                    return;
                 }
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException ignored) {
+                    break;
+                }
+            }
+            runOnUiThread(() -> {
+                loadingPanel.setVisibility(View.GONE);
+                webView.setVisibility(View.VISIBLE);
+                EngineHelp.showRemoteFailed(webView, url);
             });
         }).start();
     }
@@ -125,16 +239,10 @@ public class MainActivity extends Activity {
         try {
             URL health = new URL(baseUrl + "/api/health");
             HttpURLConnection conn = (HttpURLConnection) health.openConnection();
-            conn.setConnectTimeout(800);
-            conn.setReadTimeout(800);
+            conn.setConnectTimeout(2500);
+            conn.setReadTimeout(2500);
             conn.connect();
-            if (conn.getResponseCode() != 200) {
-                return false;
-            }
-            BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
-            String line = reader.readLine();
-            reader.close();
-            return line != null && line.contains("ready");
+            return conn.getResponseCode() == 200;
         } catch (Exception e) {
             return false;
         }
@@ -158,22 +266,31 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        if (webView == null) {
+        if (webView == null || !uiReady) {
             return;
         }
         if (isOnDeviceMode(this)) {
-            webView.loadUrl(LOCAL_URL);
+            if (pingHealth(LOCAL_URL)) {
+                webView.loadUrl(LOCAL_URL);
+            }
         } else {
-            webView.loadUrl(getRemoteUrl(this));
+            String url = getRemoteUrl(this);
+            if (pingHealth(url)) {
+                webView.loadUrl(url);
+            }
         }
     }
 
     @Override
     public void onBackPressed() {
-        if (webView != null && webView.canGoBack()) {
+        if (webView != null && webView.getVisibility() == View.VISIBLE && webView.canGoBack()) {
             webView.goBack();
         } else {
             super.onBackPressed();
         }
+    }
+
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
     }
 }

@@ -57,14 +57,9 @@ def wrapper_matrix() -> dict[str, dict[str, str]]:
             "use": "Phone browser mode",
             "path": str(root / "wrappers/linux/apex-mobile.sh"),
         },
-        "android_client_apk": {
+        "android_mobile_apk": {
             "platform": "Android",
-            "use": "Thin companion WebView (PC runs analysis)",
-            "path": str(root / "wrappers/android/dist/apex-client.apk"),
-        },
-        "android_standalone_apk": {
-            "platform": "Android",
-            "use": "Full on-device engine APK (offline analysis)",
+            "use": "APEX Mobile — on-device + optional desktop remote",
             "path": str(root / "wrappers/android/dist/apex-mobile.apk"),
         },
         "ios_guide": {

@@ -27,13 +27,13 @@ DESKTOP_LIMITS: dict[str, Any] = {
 TIER_LIMITS: dict[str, dict[str, Any]] = {
     "low": {
         "tier": "low",
-        "max_entry_size": 64 * 1024 * 1024,
-        "max_total_size": 256 * 1024 * 1024,
-        "max_entries": 25_000,
-        "max_upload_bytes": 96 * 1024 * 1024,
-        "max_decompile_classes": 400,
-        "class_display_limit": 120,
-        "dex_class_cap": 8_000,
+        "max_entry_size": 96 * 1024 * 1024,
+        "max_total_size": 384 * 1024 * 1024,
+        "max_entries": 35_000,
+        "max_upload_bytes": 128 * 1024 * 1024,
+        "max_decompile_classes": 600,
+        "class_display_limit": 150,
+        "dex_class_cap": 12_000,
     },
     "medium": {
         "tier": "medium",
@@ -82,7 +82,7 @@ def detect_tier(ram_mb: int = 0, cpu_cores: int = 0) -> str:
             return "desktop"
     if ram >= 10_000 or (ram >= 8_000 and cores >= 8):
         return "high"
-    if ram >= 5_500 or (ram >= 4_000 and cores >= 6):
+    if ram >= 3_800 or cores >= 4:
         return "medium"
     return "low"
 
@@ -136,8 +136,8 @@ def performance_note() -> str:
     if mode == "on_device":
         tier = _ACTIVE.get("tier", "low")
         return (
-            f"On-device engine ({tier} tier). Performance scales with your phone — "
-            "connect to a desktop APEX server in Settings for maximum throughput."
+            f"On-device engine ({tier} tier). Use Settings → Desktop computer "
+            "to offload analysis to your PC when you need more speed."
         )
     if mode == "remote_server":
         return "Remote mode: analysis runs on the connected desktop/server."
