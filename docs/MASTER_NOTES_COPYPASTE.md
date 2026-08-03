@@ -604,7 +604,8 @@ LOCAL GATE SCRIPT:
 [ ] apex gate tests/fixtures/sample_test.apk --msv 21 --stage candidate --ci
 [ ] git commit -am "Release vX.Y.Z" && git tag vX.Y.Z && git push && git push --tags
 [ ] Wait release.yml → verify GitHub Release assets
-[ ] Smoke: install desktop bundle + apex-mobile.apk on device
+[ ] Smoke: install desktop bundle + apex-mobile.apk on device (physical or emulator)
+[ ] Verify SHA256SUMS on GitHub Release matches downloaded assets
 
 ────────────────────────────────────────────────────────────────────────────────
 §21  BUILD FROM SCRATCH (phases if recreating repo)

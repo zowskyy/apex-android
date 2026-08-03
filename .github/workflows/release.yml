@@ -217,6 +217,13 @@ jobs:
       - name: List release files
         run: find dist -type f -ls
 
+      - name: Generate SHA256SUMS
+        run: |
+          cd dist
+          find . -type f ! -name 'SHA256SUMS' -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+          echo "==> SHA256SUMS"
+          cat SHA256SUMS
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
