@@ -30,9 +30,23 @@ fi
 
 mkdir -p "$HERE/dist"
 
-echo "==> Gradle assembleRelease (Chaquopy + embedded APEX)"
+if ! command -v python3.10 >/dev/null 2>&1; then
+  echo "python3.10 is required for Chaquopy (must match app Python 3.10)." >&2
+  echo "Install Python 3.10 or set buildPython in app/build.gradle." >&2
+  exit 1
+fi
+
+export GRADLE_VERSION="${APEX_GRADLE_VERSION:-8.10.2}"
+
+echo "==> Gradle assembleRelease (Chaquopy 17 + embedded APEX)"
 cd "$STANDALONE"
-"$GRADLE" assembleRelease --no-daemon
+
+if [[ ! -x ./gradlew ]]; then
+  echo "Generating Gradle wrapper ($GRADLE_VERSION)"
+  gradle wrapper --gradle-version "$GRADLE_VERSION" --no-daemon
+fi
+
+./gradlew assembleRelease --no-daemon
 
 BUILT="$STANDALONE/app/build/outputs/apk/release/app-release.apk"
 if [[ ! -f "$BUILT" ]]; then
