@@ -33,6 +33,7 @@ def test_pro_license_from_environment(monkeypatch):
     assert read_license_record() is not None
     assert active_edition() == Edition.PRO
     assert has_feature(Feature.MCP_SERVER)
+    assert has_feature(Feature.CODE_PILOT)
 
 
 def test_invalid_license_is_rejected(monkeypatch):

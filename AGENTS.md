@@ -20,8 +20,9 @@ slice is declared done — not only local tests.
 | Analysis | `apex/analysis.py` | ZIP (Rust), AXML/ARSC/DEX (Androguard + native DEX) |
 | Workflows | `apex/workflows.py` | analyze, decompile, decode/build, verify, security |
 | CLI | `apex/cli.py` | full command surface |
-| Web | `apex/web.py` | loopback UI |
-| Edition / MCP | `apex/edition.py`, `apex/mcp_server.py` | licensing, AI tool surface |
+| Web UI | `apex/web.py` | loopback UI + Code Pilot chat |
+| Edition / MCP / Agent | `apex/edition.py`, `apex/mcp_server.py`, `apex/agent/` | licensing, MCP, Code Pilot |
+| Tools | `apex/tools.py` | shared registry for MCP + Code Pilot |
 | Native | `core/zip_reader`, `core/dex_parser`, `core/dex_reader` | Rust hot paths |
 
 ## Development

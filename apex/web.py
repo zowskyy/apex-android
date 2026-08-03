@@ -54,6 +54,7 @@ footer{color:var(--muted);text-align:center;padding:34px}@media(max-width:800px)
 <div class="columns"><div class="panel"><h2>Application identity</h2><div id="identity"></div></div><div class="panel"><h2>Entry points</h2><div id="components"></div></div><div class="panel"><h2>Permissions</h2><div id="permissions"></div></div><div class="panel"><h2>Security findings</h2><div id="findings"></div></div></div>
 <div class="panel" style="margin-top:14px"><h2>Native architectures & resource table</h2><div id="technical"></div></div>
 <div class="panel" style="margin-top:14px"><h2>Class & method explorer</h2><div class="pathbar"><input id="classSearch" placeholder="Search classes and methods"><button id="classGo" class="secondary">Search</button></div><div id="classList" style="margin-top:12px;max-height:430px;overflow:auto"></div></div>
+<div class="panel" style="margin-top:14px"><h2>Code Pilot</h2><p class="tag" style="margin:0 0 10px">Describe what you want — Code Pilot runs APEX tools for you (Pro).</p><div id="pilotLog" style="max-height:220px;overflow:auto;margin-bottom:10px;color:#b9c8dc"></div><div class="pathbar"><input id="pilotPrompt" placeholder="e.g. security-scan this APK and summarize risks"><button id="pilotGo">Ask</button></div></div>
 </section></main><footer>APEX runs locally · Static analysis is not a malware verdict</footer>
 <script>
 let currentPath="", currentData=null;
@@ -74,6 +75,7 @@ $("file").onchange=e=>upload(e.target.files[0]);$("pathGo").onclick=()=>pathAnal
 $("classGo").onclick=()=>renderClasses($("classSearch").value);$("classSearch").oninput=e=>renderClasses(e.target.value);
 const drop=$("drop");["dragenter","dragover"].forEach(n=>drop.addEventListener(n,e=>{e.preventDefault();drop.classList.add("drag")}));["dragleave","drop"].forEach(n=>drop.addEventListener(n,e=>{e.preventDefault();drop.classList.remove("drag")}));drop.addEventListener("drop",e=>upload(e.dataTransfer.files[0]));
 $("decompile").onclick=async()=>{if(!currentPath)return;const r=await fetch("/api/decompile",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({path:currentPath})});const d=await r.json();alert(r.ok?`Decompiled ${d.class_count} classes to ${d.output}`:d.error)};
+$("pilotGo").onclick=async()=>{const prompt=$("pilotPrompt").value.trim();if(!prompt)return;const log=$("pilotLog");log.innerHTML+=`<div class="kv"><span>You</span><span>${esc(prompt)}</span></div>`;$("pilotPrompt").value="";try{const r=await fetch("/api/agent",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt,path:currentPath||null,provider:"heuristic"})});const d=await r.json();if(!r.ok)throw Error(d.error||"Code Pilot failed");log.innerHTML+=`<div class="kv"><span>Pilot</span><span>${esc(d.answer)}</span></div>`;log.scrollTop=log.scrollHeight}catch(e){log.innerHTML+=`<div class="finding">${esc(e.message)}</div>`}};
 fetch("/api/health").then(r=>r.json()).then(d=>$("health").textContent=d.ready?"● Engine ready":"● Setup required").catch(()=>$("health").textContent="● Engine unavailable");
 </script></body></html>"""
 
@@ -172,6 +174,27 @@ class ApexWebHandler(BaseHTTPRequestHandler):
                         "errors": result["errors"],
                     }
                 )
+                return
+            if route.path == "/api/agent":
+                from .agent import run_code_pilot
+                from .agent.providers import AgentError
+                from .edition import EditionError
+
+                payload = self._payload()
+                prompt = str(payload.get("prompt", "")).strip()
+                if not prompt:
+                    raise ApexError("prompt is required")
+                path = payload.get("path") or None
+                provider = str(payload.get("provider") or "heuristic")
+                try:
+                    result = run_code_pilot(
+                        prompt,
+                        apk_path=str(path) if path else None,
+                        provider=provider,
+                    )
+                except (AgentError, EditionError) as exc:
+                    raise ApexError(str(exc)) from exc
+                self._json(result)
                 return
             self._json({"error": "not found"}, HTTPStatus.NOT_FOUND)
         except ApexError as exc:

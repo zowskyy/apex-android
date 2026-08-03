@@ -42,6 +42,7 @@ class Feature(str, Enum):
     WEB_UI = "web_ui"
     # Pro automation & integration
     MCP_SERVER = "mcp_server"
+    CODE_PILOT = "code_pilot"
     POSTGRES_STORE = "postgres_store"
     BATCH_WORKFLOWS = "batch_workflows"
 
@@ -65,6 +66,7 @@ COMMUNITY_FEATURES: frozenset[Feature] = frozenset(
 PRO_FEATURES: frozenset[Feature] = COMMUNITY_FEATURES | frozenset(
     {
         Feature.MCP_SERVER,
+        Feature.CODE_PILOT,
         Feature.POSTGRES_STORE,
         Feature.BATCH_WORKFLOWS,
     }

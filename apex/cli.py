@@ -139,6 +139,25 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["show-key"],
         help="show-key: print the evaluation Pro license key",
     )
+
+    agent_cmd = sub.add_parser(
+        "agent",
+        aliases=["codepilot", "pilot"],
+        help="APEX Code Pilot — prompt-driven reverse engineering assistant (Pro)",
+    )
+    agent_cmd.add_argument("prompt", nargs="?", help="what you want to do")
+    agent_cmd.add_argument("--apk", help="active APK path for this session")
+    agent_cmd.add_argument(
+        "--provider",
+        default=None,
+        help="openai | ollama | heuristic (default: APEX_AGENT_PROVIDER or openai)",
+    )
+    agent_cmd.add_argument(
+        "--playbook",
+        choices=["triage", "decompile", "rebuild", "compare"],
+        help="optional guided playbook",
+    )
+    agent_cmd.add_argument("--trace", action="store_true", help="include tool call trace in output")
     return parser
 
 
@@ -260,6 +279,35 @@ def main(argv: list[str] | None = None) -> int:
             from .mcp_server import run_mcp_server
 
             run_mcp_server()
+        elif args.command in {"agent", "codepilot", "pilot"}:
+            from .agent import run_code_pilot
+            from .agent.providers import AgentError
+
+            if not args.prompt:
+                print(
+                    "usage: apex agent \"describe what you want\" [--apk path] [--provider openai|ollama|heuristic]",
+                    file=sys.stderr,
+                )
+                return 1
+            try:
+                result = run_code_pilot(
+                    args.prompt,
+                    apk_path=args.apk,
+                    provider=args.provider,
+                    playbook=args.playbook,
+                )
+            except AgentError as exc:
+                print(f"error: {exc}", file=sys.stderr)
+                return 1
+            if args.trace:
+                _print(result)
+            else:
+                print(result["answer"])
+                if result.get("trace"):
+                    print(
+                        f"\n[{result['provider']}] {len(result['trace'])} tool call(s)",
+                        file=sys.stderr,
+                    )
         return 0
     except (ApexError, EditionError, OSError, ValueError, json.JSONDecodeError) as exc:
         print(f"error: {exc}", file=sys.stderr)

@@ -141,6 +141,7 @@ their own licenses; see `NOTICE`. Androguard is used under Apache License 2.0.
 | Local web UI (`apex gui`) | Yes | Yes |
 | Security scan & roundtrip verification | Yes | Yes |
 | MCP server for AI assistants | — | Yes |
+| Code Pilot (in-app prompt agent) | — | Yes |
 | PostgreSQL report storage | — | Yes |
 | Batch automation workflows | — | Yes |
 
@@ -193,5 +194,26 @@ Add to your MCP client config (see `mcp-config.example.json`):
 ```
 
 Available tools: `apex_doctor`, `apex_inspect`, `apex_security_scan`,
-`apex_analyze`, `apex_decompile`, `apex_decode`, `apex_verify`, `apex_diff`.
+`apex_analyze`, `apex_decompile`, `apex_decode`, `apex_verify`, `apex_diff`,
+`apex_roundtrip`, `apex_framework_check`.
+
+## Code Pilot (Pro)
+
+In-app agent that turns natural-language prompts into APEX tool calls:
+
+```bash
+export APEX_LICENSE_KEY="$(apex mcp show-key | python -c 'import sys,json; print(json.load(sys.stdin)["license_key"])')"
+export APEX_ENTITLEMENT=demo
+
+# Offline planner (no API key) — good for demos / CI
+apex agent "security-scan this package" --apk app.apk --provider heuristic
+
+# Production / App Store builds: set APEX_AGENT_PROVIDER=openai and inject API key
+export APEX_AGENT_API_KEY=sk-...
+apex agent "triage this APK and summarize risks" --apk app.apk --playbook triage
+```
+
+Also available in the web UI **Code Pilot** panel after opening an APK
+(`apex gui`). AI cost can be bundled into the paid app price; users do not need
+a separate Copilot subscription to use APEX Code Pilot when the app supplies the key.
 
