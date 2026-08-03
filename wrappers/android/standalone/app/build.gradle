@@ -48,9 +48,8 @@ chaquopy {
             install "jinja2>=3.1.0"
             install "pygments>=2.0"
             install "apkInspector>=1.1.0"
-            install "dataset>=1.6.0"
             install "typing_extensions"
-            install "androguard==4.1.4", "--no-deps"
+            install "androguard==4.0.2"
         }
     }
     sourceSets {
