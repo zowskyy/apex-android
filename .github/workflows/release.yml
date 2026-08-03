@@ -220,16 +220,15 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Gate release APK
+      - name: Gate release APK (scan_apk wrapper)
         run: |
           python -m pip install --upgrade pip wheel maturin
           pip install -e ".[dev]"
           maturin develop --release -m core/zip_reader/Cargo.toml
           maturin develop --release -m core/dex_reader/Cargo.toml
           APK="$(ls release-staging/android/APEX-Mobile-*.apk | head -n1)"
-          echo "Verifying $APK"
-          apex gate "$APK" --msv 21 --stage candidate --ci -o gate-release.json
-          cat gate-release.json
+          export APEX_AUDIT_CONTEXT=release-verify
+          python scripts/security/scan_apk.py "$APK" -o gate-release.json --stage candidate --msv 21
 
       - uses: actions/upload-artifact@v4
         with:
@@ -237,8 +236,32 @@ jobs:
           path: gate-release.json
           if-no-files-found: error
 
+  supply-chain-scan:
+    needs: [prepare, release-verify]
+    runs-on: ubuntu-latest
+    if: github.ref_type == 'tag'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: SBOM + pip-audit
+        run: |
+          pip install -e ".[dev]"
+          pip install pip-audit cyclonedx-bom || true
+          pip-audit || echo "pip-audit advisory findings"
+          python scripts/release/generate_sbom.py sbom.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: supply-chain-sbom
+          path: sbom.json
+          if-no-files-found: error
+
   publish:
-    needs: [prepare, android, desktop-linux, desktop-windows, desktop-macos, release-verify]
+    needs: [prepare, android, desktop-linux, desktop-windows, desktop-macos, release-verify, supply-chain-scan]
     runs-on: ubuntu-latest
     if: github.ref_type == 'tag'
     steps:
@@ -250,15 +273,37 @@ jobs:
           path: dist
           merge-multiple: false
 
+      - name: Download SBOM
+        uses: actions/download-artifact@v4
+        with:
+          name: supply-chain-sbom
+          path: dist/sbom
+
       - name: List release files
         run: find dist -type f -ls
 
       - name: Generate SHA256SUMS
         run: |
           cd dist
-          find . -type f ! -name 'SHA256SUMS' -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+          find . -type f ! -name 'SHA256SUMS' ! -name 'SHA256SUMS.asc' -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
           echo "==> SHA256SUMS"
           cat SHA256SUMS
+
+      - name: Sign SHA256SUMS (optional GPG)
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          if [[ -n "${GPG_PRIVATE_KEY:-}" ]]; then
+            echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+            cd dist
+            gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
+              --default-key "$GPG_KEY_ID" --armor --detach-sign SHA256SUMS
+            ls -la SHA256SUMS.asc
+          else
+            echo "GPG_PRIVATE_KEY not set — SHA256SUMS unsigned (set secrets for signed releases)"
+          fi
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2

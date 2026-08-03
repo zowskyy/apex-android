@@ -1,0 +1,19 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.1
+    hooks:
+      - id: ruff
+        args: [--fix]
+
+  - repo: local
+    hooks:
+      - id: version-sync-check
+        name: version sources in sync
+        entry: bash scripts/release/check_version_sync.sh
+        language: system
+        pass_filenames: false
+      - id: gate-weights-sum
+        name: gate weights sum to 1.0
+        entry: python -c "from apex.gate.weights import load_scanner_weights, validate_weights; validate_weights(load_scanner_weights())"
+        language: system
+        pass_filenames: false

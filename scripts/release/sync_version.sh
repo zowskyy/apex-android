@@ -5,6 +5,13 @@ set -euo pipefail
 
 VERSION="${1:?version required}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+LOCKFILE="$ROOT/.version-sync.lock"
+
+exec 200>"$LOCKFILE"
+if ! flock -n 200; then
+  echo "sync_version: another sync is in progress (lock: $LOCKFILE)" >&2
+  exit 1
+fi
 
 python <<PY
 import pathlib, re

@@ -45,6 +45,36 @@ def _parse_toml_weights(text: str) -> dict[str, float]:
     return weights
 
 
+def _parse_toml_meta(text: str) -> dict[str, dict[str, Any]]:
+    meta: dict[str, dict[str, Any]] = {}
+    current: str | None = None
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped.startswith("[meta.") and stripped.endswith("]"):
+            current = stripped[6:-1]
+            meta[current] = {}
+            continue
+        if current and "=" in stripped:
+            key, raw = stripped.split("=", 1)
+            key = key.strip()
+            raw = raw.split("#", 1)[0].strip().strip('"')
+            if key == "false_positive_rate":
+                try:
+                    meta[current][key] = float(raw)
+                except ValueError:
+                    meta[current][key] = raw
+            elif key == "mttr_hours":
+                try:
+                    meta[current][key] = int(raw)
+                except ValueError:
+                    meta[current][key] = raw
+            else:
+                meta[current][key] = raw
+    return meta
+
+
 def load_scanner_weights(path: Path | None = None) -> dict[str, float]:
     """Return scanner→weight map; falls back to defaults if file missing."""
     weights_path = path or _WEIGHTS_PATH
@@ -69,5 +99,19 @@ def validate_weights(weights: dict[str, float]) -> None:
             raise ValueError(f"negative weight for scanner {key}")
 
 
+def load_scanner_metadata(path: Path | None = None) -> dict[str, dict[str, Any]]:
+    weights_path = path or _WEIGHTS_PATH
+    if not weights_path.is_file():
+        return {}
+    try:
+        return _parse_toml_meta(weights_path.read_text(encoding="utf-8"))
+    except OSError:
+        return {}
+
+
 def weights_metadata(weights: dict[str, float]) -> dict[str, Any]:
-    return {"scanners": list(weights.keys()), "sum": round(sum(weights.values()), 4)}
+    return {
+        "scanners": list(weights.keys()),
+        "sum": round(sum(weights.values()), 4),
+        "meta": load_scanner_metadata(),
+    }

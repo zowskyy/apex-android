@@ -37,3 +37,29 @@ jobs:
           cat gate.json
       - name: Cargo tests
         run: cargo test --workspace
+
+  gate-stages:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install apex + native extensions
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install --upgrade pip wheel maturin
+          pip install -e ".[dev]"
+          maturin develop --release -m core/zip_reader/Cargo.toml
+          maturin develop --release -m core/dex_reader/Cargo.toml
+      - name: Gate promotion matrix (sample APK)
+        run: |
+          source .venv/bin/activate
+          python scripts/generate_test_apk.py tests/fixtures/sample_test.apk
+          for stage in candidate rc beta production; do
+            echo "==> stage=$stage"
+            apex gate tests/fixtures/sample_test.apk --msv 21 --stage "$stage" -o "gate-${stage}.json"
+            python -c "import json; g=json.load(open('gate-${stage}.json')); print(g['score'], g['gate_passed'])"
+          done

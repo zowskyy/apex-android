@@ -23,3 +23,4 @@ wrappers/android/dist/
 wrappers/macos/dist/
 .coverage
 release-staging/
+.version-sync.lock

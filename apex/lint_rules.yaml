@@ -37,3 +37,9 @@ rules:
     severity: low
     message: "Logging may leak credential-like variable names"
     applies_to: "**/*.java"
+
+  - id: strictmode-violation
+    pattern: 'StrictMode\\.(?:setThreadPolicy|setVmPolicy)\\('
+    severity: medium
+    message: "StrictMode policy change — review for thread/VM policy violations on disk/network"
+    applies_to: "**/*.java"

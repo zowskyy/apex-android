@@ -2,21 +2,22 @@
 # APEX — MASTER NOTES (scratch → finish)
 # Copy everything below into your notes app. Repo: zowskyy/apex-android
 # Canonical version: 0.4.11 · Branch: cursor/complete-apex-app-5bc2 · PR #4
-# Patched: 2026-08-03 (Zero-Touch audit + repo-truth corrections)
+# Patched: 2026-08-03 (Integrated audit & automation — v1.0.0 master notes)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 ────────────────────────────────────────────────────────────────────────────────
-§0  ONE-PAGE “DO THIS IN ORDER” (scratch → shippable)
+§0  ONE-PAGE “DO THIS IN ORDER” (updated)
 ────────────────────────────────────────────────────────────────────────────────
 
-1. CLONE + DEV ENV
+1. CLONE + DEV ENV (+ pre-commit)
    git clone https://github.com/zowskyy/apex-android
    cd apex-android
    python3.12 -m venv .venv && source .venv/bin/activate
-   pip install -U pip wheel maturin
+   pip install -U pip wheel maturin pre-commit
    pip install -e ".[dev,mcp]"
    maturin develop --release -m core/zip_reader/Cargo.toml
    maturin develop --release -m core/dex_reader/Cargo.toml
+   pre-commit install && pre-commit install -t pre-push
    bash scripts/release/check_version_sync.sh
    apex doctor && pytest -q && ruff check apex tests
 
@@ -29,32 +30,32 @@
    python scripts/generate_test_apk.py tests/fixtures/sample_test.apk
    apex security-scan tests/fixtures/sample_test.apk
    apex gate tests/fixtures/sample_test.apk --msv 21 --stage candidate --ci
+   # Audit trail: ~/.apex/audit/gate_runs.jsonl (hash-chained)
 
-4. BUILD APEX MOBILE APK (symlink path — repo default)
+4. BUILD APEX MOBILE APK
    export ANDROID_HOME="$HOME/Android/Sdk"
-   bash wrappers/android/build_standalone.sh
+   bash wrappers/android/build_standalone.sh              # default: symlink apex/
+   APEX_ENGINE_MODE=wheel bash wrappers/android/build_standalone.sh  # CI parity wheel
    adb install -r wrappers/android/dist/apex-mobile.apk
-   # Note: Android uses Chaquopy + symlinked apex/ (Groovy build.gradle).
-   # Gradle wheel injection (core-wheel.whl) is NOT wired in v0.4.11.
+   # Groovy build.gradle + optional core-wheel.whl (prepare_chaquopy_engine.sh)
 
 5. PACKAGE RELEASES (local)
-   bash scripts/release/sync_version.sh 0.4.11
-   # Desktop — CI-style pre-built wheels (either env works):
+   bash scripts/release/sync_version.sh 0.4.11   # flock-locked atomic sync
    maturin build --release -m core/zip_reader/Cargo.toml -o dist/
    maturin build --release -m core/dex_reader/Cargo.toml -o dist/
    pip wheel . --no-deps -w dist/
    export CORE_WHEEL_DIR=dist
-   # or: export CORE_WHEEL="dist/*.whl"
    bash scripts/package_desktop_release.sh 0.4.11 linux
-   # Android packaging (after build_standalone + optional bundleRelease):
    bash scripts/package_android_release.sh 0.4.11
 
 6. SHIP (GitHub)
-   git tag v0.4.11 && git push origin v0.4.11
-   → triggers release.yml: wheels → android + desktop → release-verify (gate APK) → publish + SHA256SUMS
+   git tag -s v0.4.11 && git push --tags
+   → release.yml: wheels → android/desktop → release-verify (scan_apk.py)
+     → supply-chain-scan (SBOM) → publish (SHA256SUMS + optional GPG asc)
 
-7. OPTIONAL DRY-RUN (no tag)
-   GitHub Actions → Release → workflow_dispatch → version 0.4.11-test
+7. EMERGENCY
+   GitHub Actions → Emergency Rollback (emergency-rollback.yml)
+   bash scripts/runbooks/rollback.sh 0.4.10 --dry-run
 
 ────────────────────────────────────────────────────────────────────────────────
 §1  WHAT APEX IS (3 products, 1 engine)
@@ -75,8 +76,9 @@ ENGINE — Python package `apex/` + optional Rust:
 FINDING MODEL — dataclass in apex/gate/models.py (NOT Pydantic in v0.4.11)
 
 NOT IN SCOPE (v0.4.11):
-  iOS Mach-O scanning · live CVE/OSV API · dynamic malware execution · MobSF dynamic parity
-  Kotlin DSL Gradle wheel inject (Groovy + symlink is the shipped mobile path)
+  iOS Mach-O scanning · live CVE auto-FAIL · dynamic malware execution · MobSF dynamic parity
+  AWS KMS/S3 archival (documented in Phase 4 — not automated in OSS repo)
+  Kotlin DSL Gradle (Groovy + symlink/wheel is the shipped mobile path)
 
 ────────────────────────────────────────────────────────────────────────────────
 §2  REPOSITORY MAP (every important path)
@@ -87,8 +89,10 @@ apex-android/
 │   ├── cli.py, workflows.py, analysis.py, web.py, web_security.py
 │   ├── secrets_scan.py, native_scan.py, api_watch.py, netsec_scan.py
 │   ├── lint_scan.py, lint_rules.yaml, dependency_scan.py, data/cve_db.json
-│   ├── gate/                      # HARD GATE (runner, weights.toml, scanners/, budgets.py)
+│   ├── gate/                      # HARD GATE + audit_log + compliance_report
 │   └── agent/, edition.py, mcp_server.py (Pro)
+├── scripts/runbooks/, setup-ci-gpg.sh, create-golden-apk.sh, run-integration-tests.sh
+├── scripts/security/scan_apk.py, release/generate_sbom.py, fetch_cve_osv.py
 ├── core/zip_reader, core/dex_reader, core/dex_parser  # Rust
 ├── wrappers/android/build_standalone.sh, dist/apex-mobile.apk
 ├── scripts/package_*_release.sh, release/sync_version.sh, check_version_sync.sh
@@ -320,42 +324,46 @@ crypto.py: Cipher, MessageDigest, SecretKeySpec, IvParameterSpec
 reflection.py: DexClassLoader, PathClassLoader, Class.forName, Method.invoke
 
 ────────────────────────────────────────────────────────────────────────────────
-§19  CI / GITHUB ACTIONS MAP
+§19  CI / GITHUB ACTIONS MAP (updated)
 ────────────────────────────────────────────────────────────────────────────────
 
-ci.yml           — ruff, pytest, check_version_sync, gate sample APK, cargo test
-pr-checks.yml    — build-core wheels + import smoke
-hard-gate.yml    — scripts/hard_gate.sh
+ci.yml              — ruff, pytest, check_version_sync, gate-stages matrix, cargo test
+pr-checks.yml       — build-core wheels + import smoke
+hard-gate.yml       — scripts/hard_gate.sh
 android-standalone.yml — PR apex-mobile-apk artifact
-dependabot.yml   — weekly pip, cargo, github-actions
-release.yml      — full DAG:
+dependabot.yml      — weekly pip, cargo, github-actions
+supply-chain.yml    — weekly pip-audit + SBOM (sbom.json)
+emergency-rollback.yml — workflow_dispatch rollback runbook
+monitor-gates.yml   — hourly audit failure-rate check
 
-  prepare
-    → core-build [linux, windows, macos] → core-wheels-{OS}
+release.yml DAG (tag only for verify/publish):
+
+  prepare → core-build [linux, windows, macos] → core-wheels-{OS}
     → android (build_standalone + bundleRelease + package_android)
     → desktop-linux / desktop-windows / desktop-macos (CORE_WHEEL_DIR=dist)
-    → release-verify (tag only) — apex gate on APEX-Mobile-*.apk → gate-release.json
-    → publish (tag only) — all artifacts + SHA256SUMS
+    → release-verify — scan_apk.py → gate-release.json + audit log
+    → supply-chain-scan — sbom.json
+    → publish — all artifacts + SHA256SUMS (+ SHA256SUMS.asc if GPG secrets set)
 
 RELEASE ARTIFACTS:
   APEX-Mobile-{ver}.apk / .aab / .zip
   APEX-{ver}-linux-x64.tar.gz · windows-x64.zip · macos.zip
-  gate-release.json (tag releases)
-  SHA256SUMS (in publish bundle)
+  gate-release.json · sbom.json · SHA256SUMS · SHA256SUMS.asc (optional)
 
 DRY-RUN: Actions → Release → workflow_dispatch → 0.4.11-test
 
 ────────────────────────────────────────────────────────────────────────────────
-§20  RELEASE CHECKLIST (tag vX.Y.Z)
+§20  RELEASE CHECKLIST (updated)
 ────────────────────────────────────────────────────────────────────────────────
 
+[ ] pre-commit run --all-files
 [ ] bash scripts/release/sync_version.sh X.Y.Z
 [ ] bash scripts/release/check_version_sync.sh
 [ ] pytest -q && ruff check apex tests && cargo test --workspace
 [ ] apex gate tests/fixtures/sample_test.apk --msv 21 --stage candidate --ci
-[ ] Test local packaging: CORE_WHEEL_DIR=dist or CORE_WHEEL="dist/*.whl"
-[ ] git commit && git tag vX.Y.Z && git push && git push --tags
-[ ] Verify release.yml: release-verify green + SHA256SUMS on GitHub Release
+[ ] bash scripts/run-integration-tests.sh
+[ ] git commit && git tag -s vX.Y.Z && git push && git push --tags
+[ ] Verify release-verify + supply-chain-scan + SHA256SUMS on GitHub Release
 [ ] Smoke: desktop bundle + apex-mobile.apk on device/emulator
 
 ────────────────────────────────────────────────────────────────────────────────
@@ -367,16 +375,20 @@ DRY-RUN: Actions → Release → workflow_dispatch → 0.4.11-test
 7 CI workflows · 8 Packaging scripts · 9 Pro (MCP, Code Pilot)
 
 ────────────────────────────────────────────────────────────────────────────────
-§22  TEST COMMANDS
+§22  TEST COMMANDS (updated)
 ────────────────────────────────────────────────────────────────────────────────
 
 python scripts/generate_test_apk.py tests/fixtures/sample_test.apk
 bash scripts/release/check_version_sync.sh
-pytest -q
+pre-commit run --all-files
+pytest -q --ignore=tests/test_bench_rust_readers.py
+pytest tests/test_version_sync.py tests/test_audit_system.py tests/test_reproducibility.py
 ruff check apex tests
 cargo test --workspace
 apex gate tests/fixtures/sample_test.apk --msv 21 --stage candidate --ci
 bash scripts/hard_gate.sh
+bash scripts/run-integration-tests.sh
+bash scripts/runbooks/rollback.sh 0.4.10 --dry-run
 
 ────────────────────────────────────────────────────────────────────────────────
 §23  TROUBLESHOOTING
@@ -393,6 +405,9 @@ bash scripts/hard_gate.sh
 | dependency FAIL in gate | Should WARN only — advisory policy |
 | Gate weights sum | Edit apex/gate/weights.toml (must = 1.0) |
 | Chaquopy import fail | Add pip package to build.gradle |
+| GPG signing fails | Set GPG_* secrets; see scripts/setup-ci-gpg.sh |
+| Audit log disk full | AuditLogger.rotate_logs(keep_days=30) |
+| CVE/OSV stale | apex update-db --osv |
 
 ────────────────────────────────────────────────────────────────────────────────
 §24  DOCS INDEX
@@ -400,6 +415,8 @@ bash scripts/hard_gate.sh
 
 docs/README.md                — Start here (index)
 docs/MASTER_NOTES_COPYPASTE.md — This file
+docs/IMPLEMENTATION_ROADMAP.md · RISK_ASSESSMENT.md · RUNBOOKS.md
+docs/COMPLIANCE.md · SECURITY.md · REPRODUCIBILITY.md
 docs/BLUEPRINT_GUIDE.md       — Operations how-to
 docs/AUDIT_RESPONSE_0.4.11.md — External audit + policy
 docs/COMPLETION_ROADMAP.md    — Capability matrix
@@ -417,6 +434,59 @@ Releases: https://github.com/zowskyy/apex-android/releases
 Actions:  https://github.com/zowskyy/apex-android/actions
 PR #4:    https://github.com/zowskyy/apex-android/pull/4
 
+────────────────────────────────────────────────────────────────────────────────
+§26  IMPLEMENTATION ROADMAP (NEW) — see docs/IMPLEMENTATION_ROADMAP.md
+────────────────────────────────────────────────────────────────────────────────
+
+Phase 1: audit_log + flock sync + pre-commit + golden baseline ✅
+Phase 2: supply-chain.yml + GPG SHA256SUMS + apex update-db --osv ✅
+Phase 3: runbooks + rollback/monitor workflows + integration tests ✅
+Phase 4: signed-tag enforcement + S3 archival + Docker reproducibility 📋
+
+────────────────────────────────────────────────────────────────────────────────
+§27  RISK ASSESSMENT MATRIX (NEW) — see docs/RISK_ASSESSMENT.md
+────────────────────────────────────────────────────────────────────────────────
+
+GPG compromise · OSV downtime · version sync race · false-positive gates · audit storage
+
+────────────────────────────────────────────────────────────────────────────────
+§28  TESTING CHECKLIST (NEW)
+────────────────────────────────────────────────────────────────────────────────
+
+[ ] Gate fails on blocking FAIL; passes clean sample APK
+[ ] sync_version.sh flock (parallel syncs)
+[ ] Audit log integrity verify_integrity()
+[ ] SBOM generated (scripts/release/generate_sbom.py)
+[ ] Rollback --dry-run < 5 minutes
+[ ] Golden baseline regression (create-golden-apk.sh)
+
+────────────────────────────────────────────────────────────────────────────────
+§29  SUCCESS METRICS & KPIs (NEW)
+────────────────────────────────────────────────────────────────────────────────
+
+Gate failure rate < 2% · MTTR < 24h · Unsigned releases = 0 (when GPG configured)
+Audit integrity 100% · Version sync failures = 0
+
+────────────────────────────────────────────────────────────────────────────────
+§30  RUNBOOKS (NEW) — scripts/runbooks/ + docs/RUNBOOKS.md
+────────────────────────────────────────────────────────────────────────────────
+
+critical-cve.sh · rollback.sh · version-drift.sh (all support --dry-run)
+
+────────────────────────────────────────────────────────────────────────────────
+§31  COMPLIANCE & AUDIT TRAIL (NEW)
+────────────────────────────────────────────────────────────────────────────────
+
+apex/gate/audit_log.py — hash-chained JSONL at ~/.apex/audit/
+apex/gate/compliance_report.py — monthly compliance-YYYY-MM.json
+
+────────────────────────────────────────────────────────────────────────────────
+§32–§35  INFRA / DECISION TREE / TOOLS / RISKS (NEW)
+────────────────────────────────────────────────────────────────────────────────
+
+See docs/COMPLIANCE.md, docs/SECURITY.md, docs/RISK_ASSESSMENT.md for:
+  AWS KMS/S3 (planned) · monitoring · decision tree · tool ecosystem
+
 ════════════════════════════════════════════════════════════════════════════════
-END OF MASTER NOTES — repo-truth patched 2026-08-03
+END OF MASTER NOTES — integrated audit & automation v1.0.0 (2026-08-03)
 ════════════════════════════════════════════════════════════════════════════════

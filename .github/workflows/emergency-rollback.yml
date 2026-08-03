@@ -1,0 +1,32 @@
+name: Emergency Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_version:
+        description: "Version to roll back to (e.g. 0.4.10)"
+        required: true
+      dry_run:
+        description: "Dry run only (no tag created)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Rollback runbook
+        run: |
+          chmod +x scripts/runbooks/rollback.sh
+          if [[ "${{ inputs.dry_run }}" == "true" ]]; then
+            bash scripts/runbooks/rollback.sh "${{ inputs.target_version }}" --dry-run
+          else
+            bash scripts/runbooks/rollback.sh "${{ inputs.target_version }}"
+          fi

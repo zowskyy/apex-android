@@ -35,4 +35,20 @@ CRYPTO_WATCHLIST: list[WatchEntry] = [
         "IvParameterSpec constructed — review for hardcoded IV",
         severity="WARN",
     ),
+    WatchEntry(
+        "java/security/SecureRandom",
+        "<init>",
+        "crypto-weak-random",
+        "SecureRandom constructed — verify seed source is not predictable",
+        severity="WARN",
+        string_hint=r"new SecureRandom\\(\\)|setSeed",
+    ),
+    WatchEntry(
+        "java/security/SecureRandom",
+        "getInstance",
+        "crypto-weak-random",
+        "SecureRandom.getInstance — verify algorithm is not SHA1PRNG default misuse",
+        severity="WARN",
+        string_hint=r"SHA1PRNG|setSeed",
+    ),
 ]

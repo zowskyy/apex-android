@@ -14,8 +14,10 @@ if [[ ! -f "$APK" ]]; then
   exit 1
 fi
 
-if [[ ! -d "$PY_SRC/apex" ]]; then
-  echo "smoke_android_engine_imports: missing $PY_SRC/apex" >&2
+if [[ -f "$STANDALONE/.engine-mode" ]]; then
+  echo "  ok  wheel engine mode (Chaquopy pip install)"
+elif [[ ! -d "$PY_SRC/apex" ]]; then
+  echo "smoke_android_engine_imports: missing $PY_SRC/apex symlink" >&2
   exit 1
 fi
 

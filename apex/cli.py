@@ -123,9 +123,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="exit 1 if gate_passed is false (for pipelines)",
     )
 
-    sub.add_parser(
+    update_db_cmd = sub.add_parser(
         "update-db",
         help="refresh bundled CVE library database in ~/.apex/cve_db.json",
+    )
+    update_db_cmd.add_argument(
+        "--osv",
+        action="store_true",
+        help="merge OSV advisories via scripts/release/fetch_cve_osv.py",
     )
 
     sub.add_parser("doctor", help="show parser and external tool availability")
@@ -289,6 +294,14 @@ def main(argv: list[str] | None = None) -> int:
 
             path = update_cve_db_from_bundle()
             print(f"CVE database updated: {path}")
+            if args.osv:
+                import subprocess
+
+                root = Path(__file__).resolve().parent.parent
+                script = root / "scripts" / "release" / "fetch_cve_osv.py"
+                subprocess.run([sys.executable, str(script)], check=False)
+            else:
+                print("Optional OSV merge: apex update-db --osv")
             return 0
         elif args.command == "doctor":
             _print(doctor())

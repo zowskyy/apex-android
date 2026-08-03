@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from apex.analysis import ApexError, inspect_apk, resolve_android_package, sha256_file
+from apex.gate.audit_log import AuditLogger
 from apex.gate.budgets import run_with_budget
 from apex.gate.models import GateFinding, GateReport, GateStage, GateStatus
 from apex.gate.scanners.api_watch import scan_api_watch
@@ -119,7 +121,7 @@ def run_hard_gate(
     min_score = _STAGE_MIN_SCORE.get(stage, 60.0)
     gate_passed = not blocking and score >= min_score
 
-    return GateReport(
+    report = GateReport(
         apk=str(resolved.resolve()),
         apk_sha256=sha256_file(resolved),
         stage=stage,
@@ -131,6 +133,9 @@ def run_hard_gate(
         container_note=str(container.get("container_note") or ""),
         resolved_from=container.get("resolved_from"),
     )
+    if not os.environ.get("APEX_SKIP_AUDIT_LOG"):
+        AuditLogger().record_gate_run(report, context=os.environ.get("APEX_AUDIT_CONTEXT", "gate"))
+    return report
 
 
 def scan_api_watch_light(apk_path: Path) -> list[GateFinding]:
