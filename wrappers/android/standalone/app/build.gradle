@@ -11,8 +11,8 @@ android {
         applicationId "io.apex.standalone"
         minSdk 24
         targetSdk 34
-        versionCode 5
-        versionName "0.4.1"
+        versionCode 6
+        versionName "0.4.2"
 
         ndk {
             abiFilters "arm64-v8a", "armeabi-v7a", "x86_64"
@@ -38,18 +38,24 @@ chaquopy {
         buildPython "python3.10"
         extractPackages "apex", "androguard"
         pip {
+            // --no-deps: Chaquopy cannot resolve frida etc.; list transitive deps explicitly.
             options("--no-deps")
             install "cryptography==42.0.8"
+            install "cffi>=1.15.0"
+            install "pycparser"
             install "lxml>=4.9.0"
             install "asn1crypto>=1.5.0"
             install "networkx>=3.0"
             install "click>=8.0"
             install "colorama>=0.4"
             install "pyyaml>=6.0"
+            install "markupsafe>=2.0"
             install "jinja2>=3.1.0"
             install "pygments>=2.0"
             install "apkInspector>=1.1.0"
             install "typing_extensions"
+            install "mutf8"
+            install "loguru"
             install "androguard==4.1.4"
         }
     }
