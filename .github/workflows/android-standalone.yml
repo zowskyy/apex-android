@@ -49,8 +49,9 @@ jobs:
       - name: Package standalone artifact with README
         run: |
           cat > wrappers/android/dist/WHICH_APK.txt << 'EOF'
-          THIS IS THE APEX MOBILE APK (apex-mobile.apk)
+          APEX MOBILE APK (apex-mobile.apk) — version 0.4.1
           Full engine on phone + optional desktop remote in Settings.
+          Menu: Settings (not Server URL). App name: APEX
           EOF
           cd wrappers/android/dist
           zip -j apex-mobile-apk.zip apex-mobile.apk WHICH_APK.txt
