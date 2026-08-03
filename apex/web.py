@@ -14,7 +14,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from .analysis import ApexError, dex_metadata, inspect_apk, sanitized_zip_name
+from .analysis import ApexError, dex_metadata, inspect_apk, resolve_android_package, sanitized_zip_name
 from .device_profile import doctor_fields
 from .device_profile import limits as device_limits
 from .workflows import decompile_apk, doctor, security_scan
@@ -89,10 +89,14 @@ function kv(k,v){return `<div class="kv"><span>${esc(k)}</span><span>${esc(v||"�
 function pills(items){return items?.length?items.map(x=>`<span class="pill">${esc(x)}</span>`).join(""):'<span class="empty">None detected</span>'}
 function renderClasses(query=""){const d=currentData?.dex||{},q=query.toLowerCase(),methods=d.methods||[],classes=(d.classes||[]).filter(c=>!q||c.name.toLowerCase().includes(q)||methods.some(m=>m.class===c.name&&(m.name+m.descriptor).toLowerCase().includes(q)));$("classList").innerHTML=classes.slice(0,classDisplayLimit).map(c=>{const classMatches=!q||c.name.toLowerCase().includes(q),ms=methods.filter(m=>m.class===c.name&&(classMatches||(m.name+m.descriptor).toLowerCase().includes(q)));return `<details><summary><code>${esc(c.name)}</code> <span class="tag">${esc(c.access||"")}</span></summary>${ms.map(m=>`<div class="kv"><span>${esc(m.access)}</span><code>${esc(m.name+m.descriptor)}</code></div>`).join("")||'<div class="empty">No matching methods</div>'}</details>`}).join("")||'<span class="empty">No matching DEX classes.</span>'}
 function render(data){const i=data.inspect,s=data.security,m=i.manifest||{};currentPath=data.path;currentData=data;$("results").classList.remove("hidden");
-$("filename").textContent=i.path.split(/[\\/]/).pop();$("hash").textContent=i.sha256;$("entries").textContent=i.entry_count;$("dex").textContent=(data.dex?.classes||[]).length;$("perms").textContent=(m.permissions||[]).length;$("risk").textContent=s.verdict;
+const title=data.container_note?data.container_note:i.path.split(/[\\/]/).pop();
+$("filename").textContent=title;$("hash").textContent=i.sha256;$("entries").textContent=i.entry_count;$("dex").textContent=(data.dex?.classes||[]).length;$("perms").textContent=(m.permissions||[]).length;$("risk").textContent=s.verdict;
 $("identity").innerHTML=kv("Package",m.package)+kv("Version",`${m.version_name||"?"} (${m.version_code||"?"})`)+kv("SDK",`min ${m.min_sdk||"?"} · target ${m.target_sdk||"?"}`)+kv("Main activity",m.main_activity);
 $("components").innerHTML=pills([...(m.activities||[]),...(m.services||[]),...(m.receivers||[]),...(m.providers||[])]);
-$("permissions").innerHTML=pills(m.permissions||[]);$("findings").innerHTML=s.findings.length?s.findings.map(f=>`<div class="finding ${esc(f.severity)}"><strong>${esc(f.category)}</strong> · ${esc(f.message)}<br><small>${esc(f.evidence||"")}</small></div>`).join(""):'<span class="empty">No static security findings.</span>';
+$("permissions").innerHTML=pills(m.permissions||[]);
+const noDex=(data.dex?.classes||[]).length===0;
+const findingHtml=s.findings.length?s.findings.map(f=>`<div class="finding ${esc(f.severity)}"><strong>${esc(f.category)}</strong> · ${esc(f.message)}<br><small>${esc(f.evidence||"")}</small></div>`).join(""):'';
+$("findings").innerHTML=noDex?`<div class="finding low"><strong>No DEX in this file</strong> · Upload an APK, or a ZIP that contains an APK inside.</div>${findingHtml}`:(findingHtml||'<span class="empty">No static security findings.</span>');
 $("technical").innerHTML=kv("Format",(i.format||"apk").toUpperCase())+kv("DEX files",(i.dex_files||[]).join(", ")||"none")+kv("Native ABIs",(i.native_abis||[]).join(", ")||"none")+kv("Resource packages",(i.resource_table?.packages||[]).join(", ")||"none")+kv("Locales",(i.resource_table?.locales||[]).join(", ")||"none");renderClasses()}
 async function pathAnalyze(path){busy(true);try{const r=await fetch("/api/open",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({path})});const d=await r.json();if(!r.ok)throw Error(d.error||"Analysis failed");render(d)}catch(e){alert(e.message)}finally{busy(false)}}
 async function upload(file){if(!file)return;busy(true);try{const r=await fetch("/api/upload?name="+encodeURIComponent(file.name),{method:"POST",body:file});const d=await r.json();if(!r.ok)throw Error(d.error||"Upload failed");render(d)}catch(e){alert(e.message)}finally{busy(false)}}
@@ -100,7 +104,7 @@ $("file").onchange=e=>upload(e.target.files[0]);$("pathGo").onclick=()=>pathAnal
 $("classGo").onclick=()=>renderClasses($("classSearch").value);$("classSearch").oninput=e=>renderClasses(e.target.value);
 const drop=$("drop");["dragenter","dragover"].forEach(n=>drop.addEventListener(n,e=>{e.preventDefault();drop.classList.add("drag")}));["dragleave","drop"].forEach(n=>drop.addEventListener(n,e=>{e.preventDefault();drop.classList.remove("drag")}));drop.addEventListener("drop",e=>upload(e.dataTransfer.files[0]));
 drop.addEventListener("click",e=>{if(e.target.closest("label")||e.target.id==="file")return;e.preventDefault();$("file").click()});
-$("decompile").onclick=async()=>{if(!currentPath)return;const r=await fetch("/api/decompile",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({path:currentPath})});const d=await r.json();alert(r.ok?`Decompiled ${d.class_count} classes to ${d.output}`:d.error)};
+$("decompile").onclick=async()=>{if(!currentPath)return;const r=await fetch("/api/decompile",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({path:currentPath})});const d=await r.json();if(!r.ok){alert(d.error);return}if(!d.class_count){alert(d.hint||"No DEX classes to decompile in this file.");return}alert(`Decompiled ${d.class_count} classes to ${d.output}`)};
 $("pilotGo").onclick=async()=>{const prompt=$("pilotPrompt").value.trim();if(!prompt)return;const log=$("pilotLog");log.innerHTML+=`<div class="kv"><span>You</span><span>${esc(prompt)}</span></div>`;$("pilotPrompt").value="";try{const r=await fetch("/api/agent",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt,path:currentPath||null,provider:"heuristic"})});const d=await r.json();if(!r.ok)throw Error(d.error||"Code Pilot failed");log.innerHTML+=`<div class="kv"><span>Pilot</span><span>${esc(d.answer)}</span></div>`;log.scrollTop=log.scrollHeight}catch(e){log.innerHTML+=`<div class="finding">${esc(e.message)}</div>`}};
 fetch("/api/health").then(r=>r.json()).then(d=>{
   $("health").textContent=d.ready?"● Engine ready":"● Setup required";
@@ -170,9 +174,8 @@ class ApexWebHandler(BaseHTTPRequestHandler):
             raise ApexError("request body must be JSON") from exc
 
     def _analyze_path(self, path: Path) -> dict:
-        resolved = path.expanduser().resolve()
-        if not resolved.is_file():
-            raise ApexError(f"APK not found: {resolved}")
+        workspace = Path(getattr(self.server, "workspace"))
+        resolved, container = resolve_android_package(path, workspace)
         dex = {"classes": [], "methods": [], "edges": [], "errors": []}
         with zipfile.ZipFile(resolved) as archive:
             for name in sorted(
@@ -189,6 +192,10 @@ class ApexWebHandler(BaseHTTPRequestHandler):
         dex = self._cap_dex(dex)
         return {
             "path": str(resolved),
+            "container_path": container.get("container_path"),
+            "resolved_from": container.get("resolved_from"),
+            "nested_apks": container.get("nested_apks", []),
+            "container_note": container.get("container_note", ""),
             "inspect": inspect_apk(resolved),
             "security": security_scan(resolved),
             "dex": dex,
@@ -231,13 +238,26 @@ class ApexWebHandler(BaseHTTPRequestHandler):
                 apk = Path(str(payload.get("path", ""))).resolve()
                 if not apk.is_file():
                     raise ApexError(f"APK not found: {apk}")
-                output = Path(getattr(self.server, "workspace")) / f"{apk.stem}-decompiled"
-                result = decompile_apk(apk, output)
+                workspace = Path(getattr(self.server, "workspace"))
+                resolved, container = resolve_android_package(apk, workspace)
+                output = workspace / f"{resolved.stem}-decompiled"
+                result = decompile_apk(resolved, output)
+                class_count = len(result["classes"])
+                hint = ""
+                if class_count == 0:
+                    if container.get("nested_apks") and not container.get("resolved_from"):
+                        hint = "ZIP has no DEX at the root. Nested APKs were not extracted."
+                    elif container.get("resolved_from"):
+                        hint = f"No DEX in {container['resolved_from']}. Try another APK inside the ZIP."
+                    else:
+                        hint = "No DEX classes in this file. Upload an APK, not a generic ZIP."
                 self._json(
                     {
                         "output": str(output),
-                        "class_count": len(result["classes"]),
-                        "errors": result["errors"],
+                        "class_count": class_count,
+                        "errors": result.get("errors", []),
+                        "hint": hint,
+                        "resolved_from": container.get("resolved_from"),
                     }
                 )
                 return

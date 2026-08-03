@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 import xml.etree.ElementTree as ET
 import zipfile
@@ -73,6 +74,79 @@ def sanitized_zip_name(raw_name: str) -> str | None:
     if not parts or any(part == ".." for part in parts):
         return None
     return "/".join(parts)
+
+
+def package_has_dex(path: Path) -> bool:
+    """Return True when the archive contains APK-style classes*.dex entries."""
+    try:
+        with zipfile.ZipFile(path) as archive:
+            return any(
+                re.fullmatch(r"(?:.*/)?classes\d*\.dex", name.replace("\\", "/"))
+                for name in archive.namelist()
+            )
+    except zipfile.BadZipFile:
+        return False
+
+
+def _nested_apk_entries(names: list[str]) -> list[str]:
+    return sorted(
+        name
+        for name in names
+        if name.lower().endswith(".apk") and sanitized_zip_name(name) is not None
+    )
+
+
+def _pick_nested_apk(archive: zipfile.ZipFile, candidates: list[str]) -> str:
+    for prefer in ("base.apk", "master.apk", "main.apk"):
+        for candidate in candidates:
+            if Path(candidate).name.lower() == prefer:
+                return candidate
+    return max(candidates, key=lambda name: archive.getinfo(name).file_size)
+
+
+def resolve_android_package(path: Path, workspace: Path | None = None) -> tuple[Path, dict[str, Any]]:
+    """Resolve ZIP/XAPK containers to an inner APK when the upload has no root DEX."""
+    path = Path(path)
+    meta: dict[str, Any] = {
+        "container_path": str(path),
+        "resolved_from": None,
+        "nested_apks": [],
+        "container_note": "",
+    }
+    if not path.is_file():
+        raise ApexError(f"package not found: {path}")
+
+    if package_has_dex(path):
+        return path, meta
+
+    if path.suffix.lower() not in {".zip", ".xapk", ".apks", ".apk"}:
+        return path, meta
+
+    try:
+        with zipfile.ZipFile(path) as archive:
+            nested = _nested_apk_entries(archive.namelist())
+            meta["nested_apks"] = nested
+            if not nested:
+                meta["container_note"] = (
+                    "No DEX classes in this file. Upload an APK, or a ZIP that contains one."
+                )
+                return path, meta
+
+            pick = _pick_nested_apk(archive, nested)
+            meta["resolved_from"] = pick
+            target_dir = Path(workspace) if workspace is not None else path.parent
+            target_dir.mkdir(parents=True, exist_ok=True)
+            safe_name = sanitized_zip_name(pick) or Path(pick).name
+            destination = target_dir / f".resolved-{Path(safe_name).name}"
+            destination.write_bytes(archive.read(pick))
+            container_name = path.name
+            inner_name = Path(pick).name
+            meta["container_note"] = f"Opened {inner_name} inside {container_name}"
+            return destination, meta
+    except zipfile.BadZipFile as exc:
+        raise ApexError(f"not a valid ZIP/APK archive: {path}") from exc
+
+    return path, meta
 
 
 def _fallback_extract(apk_path: Path, extract_dir: Path) -> dict[str, Any]:
