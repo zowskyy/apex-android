@@ -1,0 +1,11 @@
+{
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/.pytest_cache": true,
+    "**/target": true
+  },
+  "terminal.integrated.env.linux": {
+    "ANDROID_HOME": "${env:ANDROID_HOME}",
+    "ANDROID_SDK_ROOT": "${env:ANDROID_SDK_ROOT}"
+  }
+}

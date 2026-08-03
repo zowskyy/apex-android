@@ -197,6 +197,17 @@ fn oncreate_cfg_is_single_straight_line_block() {
 }
 
 #[test]
+fn metadata_matches_real_fixture_shape() {
+    let dex = apex_dex_parser::parse(CLASSES_DEX).expect("parse");
+    let metadata = apex_dex_parser::metadata::build_metadata(&dex, "classes.dex").expect("metadata");
+
+    assert_eq!(metadata.classes.len(), 7);
+    assert!(metadata.methods.iter().any(|m| m.name == "onCreate"));
+    assert!(metadata.edges.iter().any(|e| e.caller_method == "onCreate"));
+    assert!(metadata.strings.iter().any(|s| s.contains("MainActivity")));
+}
+
+#[test]
 fn every_class_data_offset_parses_without_desync() {
     // Regression guard for the exact bug found in dex-hybrid: if class_def
     // parsing desyncs (e.g. from a missing struct field), class_data_off

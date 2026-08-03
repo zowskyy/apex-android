@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "updated": "2026-08-03",
+  "libraries": [
+    {
+      "package_prefix": "okhttp3",
+      "name": "OkHttp",
+      "version_regex": "okhttp/(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "vulnerabilities": [
+        {
+          "below": "4.9.2",
+          "cve": "CVE-2021-0341",
+          "severity": "high",
+          "note": "Certificate pinning bypass in older OkHttp"
+        }
+      ]
+    },
+    {
+      "package_prefix": "com.google.gson",
+      "name": "Gson",
+      "version_regex": "gson-(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "vulnerabilities": [
+        {
+          "below": "2.8.9",
+          "cve": "CVE-2022-25647",
+          "severity": "high",
+          "note": "Deserialization issues in older Gson"
+        }
+      ]
+    },
+    {
+      "package_prefix": "org.apache.commons.logging",
+      "name": "Apache Commons Logging",
+      "version_regex": "(\\d+\\.\\d+(?:\\.\\d+)?)",
+      "vulnerabilities": []
+    }
+  ]
+}

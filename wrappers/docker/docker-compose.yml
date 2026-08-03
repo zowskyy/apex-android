@@ -1,0 +1,13 @@
+services:
+  apex:
+    build:
+      context: ../..
+      dockerfile: wrappers/docker/Dockerfile
+    ports:
+      - "8765:8765"
+    volumes:
+      - apex-data:/data
+    restart: unless-stopped
+
+volumes:
+  apex-data:

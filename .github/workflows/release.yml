@@ -1,0 +1,320 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (manual dry-run artifact names)"
+        required: true
+        default: "0.4.11"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - id: ver
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          fi
+
+  core-build:
+    needs: prepare
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            python-version: "3.10"
+          - os: windows-latest
+            python-version: "3.12"
+          - os: macos-latest
+            python-version: "3.12"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/build-core
+        with:
+          version: ${{ needs.prepare.outputs.version }}
+          python-version: ${{ matrix.python-version }}
+
+  android:
+    needs: [prepare, core-build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10.2"
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('wrappers/android/standalone/**/*.gradle*', '**/gradle-wrapper.properties') }}
+
+      - name: Sync release version metadata
+        run: |
+          chmod +x scripts/release/sync_version.sh
+          bash scripts/release/sync_version.sh "${{ needs.prepare.outputs.version }}"
+
+      - name: Install SDK packages
+        run: |
+          sdkmanager --install "platforms;android-34" "build-tools;34.0.0"
+          yes | sdkmanager --licenses >/dev/null || true
+
+      - name: Build APK (Chaquopy + symlinked apex source)
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
+        run: |
+          chmod +x wrappers/android/build_standalone.sh
+          bash wrappers/android/build_standalone.sh
+          cd wrappers/android/standalone
+          ./gradlew bundleRelease --no-daemon
+          ls -la app/build/outputs/bundle/release/
+
+      - name: Package Android release files
+        run: |
+          chmod +x scripts/package_android_release.sh
+          bash scripts/package_android_release.sh "${{ needs.prepare.outputs.version }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-release
+          path: release-staging/android/*
+          if-no-files-found: error
+
+  desktop-linux:
+    needs: [prepare, core-build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Download Linux core wheels
+        uses: actions/download-artifact@v4
+        with:
+          name: core-wheels-Linux
+          path: dist/
+
+      - name: Package Linux desktop bundle
+        env:
+          CORE_WHEEL_DIR: dist
+        run: |
+          chmod +x scripts/package_desktop_release.sh
+          bash scripts/package_desktop_release.sh "${{ needs.prepare.outputs.version }}" linux
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-linux
+          path: release-staging/APEX-*-linux-x64.tar.gz
+          if-no-files-found: error
+
+  desktop-windows:
+    needs: [prepare, core-build]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download Windows core wheels
+        uses: actions/download-artifact@v4
+        with:
+          name: core-wheels-Windows
+          path: dist/
+
+      - name: Package Windows desktop bundle
+        env:
+          CORE_WHEEL_DIR: dist
+        shell: bash
+        run: |
+          chmod +x scripts/package_desktop_release.sh
+          bash scripts/package_desktop_release.sh "${{ needs.prepare.outputs.version }}" windows
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-windows
+          path: release-staging/APEX-*-windows-x64.zip
+          if-no-files-found: error
+
+  desktop-macos:
+    needs: [prepare, core-build]
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download macOS core wheels
+        uses: actions/download-artifact@v4
+        with:
+          name: core-wheels-macOS
+          path: dist/
+
+      - name: Package macOS desktop bundle
+        env:
+          CORE_WHEEL_DIR: dist
+        run: |
+          chmod +x scripts/package_desktop_release.sh
+          bash scripts/package_desktop_release.sh "${{ needs.prepare.outputs.version }}" macos
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-macos
+          path: release-staging/APEX-*-macos.zip
+          if-no-files-found: error
+
+  release-verify:
+    needs: [prepare, android]
+    runs-on: ubuntu-latest
+    if: github.ref_type == 'tag'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-release
+          path: release-staging/android
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Gate release APK (scan_apk wrapper)
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          python -m pip install --upgrade pip wheel maturin
+          pip install -e ".[dev]"
+          maturin develop --release -m core/zip_reader/Cargo.toml
+          maturin develop --release -m core/dex_reader/Cargo.toml
+          APK="$(ls release-staging/android/APEX-Mobile-*.apk | head -n1)"
+          export APEX_AUDIT_CONTEXT=release-verify
+          python scripts/security/scan_apk.py "$APK" -o gate-release.json --stage candidate --msv 21
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gate-release-report
+          path: gate-release.json
+          if-no-files-found: error
+
+  supply-chain-scan:
+    needs: [prepare, release-verify]
+    runs-on: ubuntu-latest
+    if: github.ref_type == 'tag'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: SBOM + pip-audit
+        run: |
+          pip install -e ".[dev]"
+          pip install pip-audit cyclonedx-bom || true
+          pip-audit || echo "pip-audit advisory findings"
+          python scripts/release/generate_sbom.py sbom.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: supply-chain-sbom
+          path: sbom.json
+          if-no-files-found: error
+
+  publish:
+    needs: [prepare, android, desktop-linux, desktop-windows, desktop-macos, release-verify, supply-chain-scan]
+    runs-on: ubuntu-latest
+    if: github.ref_type == 'tag'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: false
+
+      - name: Download SBOM
+        uses: actions/download-artifact@v4
+        with:
+          name: supply-chain-sbom
+          path: dist/sbom
+
+      - name: List release files
+        run: find dist -type f -ls
+
+      - name: Generate SHA256SUMS
+        run: |
+          cd dist
+          find . -type f ! -name 'SHA256SUMS' ! -name 'SHA256SUMS.asc' -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+          echo "==> SHA256SUMS"
+          cat SHA256SUMS
+
+      - name: Sign SHA256SUMS (optional GPG)
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          if [[ -n "${GPG_PRIVATE_KEY:-}" ]]; then
+            echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+            cd dist
+            gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
+              --default-key "$GPG_KEY_ID" --armor --detach-sign SHA256SUMS
+            ls -la SHA256SUMS.asc
+          else
+            echo "GPG_PRIVATE_KEY not set — SHA256SUMS unsigned (set secrets for signed releases)"
+          fi
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: APEX v${{ needs.prepare.outputs.version }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body_path: scripts/release/RELEASE_NOTES.md
+          files: dist/**/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

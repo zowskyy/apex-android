@@ -1,0 +1,27 @@
+APEX Android Package EXaminer
+Copyright (c) 2026 APEX Contributors
+
+This product bundles or interacts with the following third-party components:
+
+Androguard — Apache License 2.0
+https://github.com/androguard/androguard
+
+Jinja2 — BSD 3-Clause License
+https://github.com/pallets/jinja
+
+FastMCP (optional MCP integration) — Apache License 2.0
+https://github.com/jlowin/fastmcp
+
+zip crate (apex_zip_reader) — MIT License
+https://github.com/zip-rs/zip2
+
+apex_dex_parser / apex_dex_reader — MIT License (APEX project)
+
+PyO3 (apex_zip_reader) — Apache License 2.0 / MIT
+https://github.com/PyO3/pyo3
+
+Optional external tools (not bundled):
+- apktool — Apache License 2.0
+- Android SDK build-tools (apksigner, aapt2) — Android Software Development Kit License
+
+See LICENSE for the APEX project license (MIT).

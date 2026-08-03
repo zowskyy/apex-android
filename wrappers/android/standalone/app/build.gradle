@@ -1,0 +1,94 @@
+plugins {
+    id "com.android.application"
+    id "com.chaquo.python"
+}
+
+android {
+    namespace "io.apex.standalone"
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "io.apex.standalone"
+        minSdk 24
+        targetSdk 34
+        versionCode 411
+        versionName "0.4.11"
+
+        ndk {
+            abiFilters "arm64-v8a", "armeabi-v7a", "x86_64"
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.debug
+            // Replace with production signing (keystore / Play App Signing).
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+def resolveEngineWheel() {
+    def marker = rootProject.file(".engine-mode")
+    def coreWheel = rootProject.file("core-wheel.whl")
+    if (coreWheel.exists()) {
+        return coreWheel
+    }
+    if (marker.exists()) {
+        rootProject.file("").listFiles()?.find { f ->
+            f.name.endsWith(".whl") && f.name.startsWith("apex_android-")
+        }
+    }
+    return null
+}
+
+def engineWheel = resolveEngineWheel()
+def useWheelEngine = engineWheel != null && engineWheel.exists()
+
+chaquopy {
+    defaultConfig {
+        version = "3.10"
+        buildPython "python3.10"
+        if (useWheelEngine) {
+            extractPackages "apex", "androguard", "mutf8"
+        } else {
+            extractPackages "apex", "androguard", "mutf8"
+        }
+        pip {
+            options("--no-deps")
+            if (useWheelEngine) {
+                install("apex-android@file://${engineWheel.absolutePath}")
+            }
+            install "cryptography==42.0.8"
+            install "cffi>=1.15.0"
+            install "pycparser"
+            install "lxml>=4.9.0"
+            install "asn1crypto>=1.5.0"
+            install "networkx>=3.0"
+            install "click>=8.0"
+            install "colorama>=0.4"
+            install "pyyaml>=6.0"
+            install "markupsafe>=2.0"
+            install "jinja2>=3.1.0"
+            install "pygments>=2.0"
+            install "apkInspector>=1.1.0"
+            install "typing_extensions"
+            install "loguru"
+            install "androguard==4.1.4"
+        }
+    }
+}
+
+dependencies {
+    implementation "androidx.appcompat:appcompat:1.7.0"
+}
+
+configurations.configureEach {
+    exclude group: "org.jetbrains.kotlin", module: "kotlin-stdlib-jdk7"
+    exclude group: "org.jetbrains.kotlin", module: "kotlin-stdlib-jdk8"
+}

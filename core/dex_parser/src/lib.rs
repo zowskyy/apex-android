@@ -24,13 +24,16 @@
 //! (every stage was a stub — see the review this port is based on). Real
 //! bytecode decoding is Slice 1.5 proper, not something to fake here.
 
+pub mod access;
 pub mod cfg;
 pub mod class_data;
 pub mod class_def;
 pub mod code;
 pub mod error;
 pub mod header;
+pub mod metadata;
 pub mod opcode;
+pub mod proto;
 pub mod reader;
 pub mod strings;
 

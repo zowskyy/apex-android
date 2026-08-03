@@ -1,6 +1,27 @@
 # PROJECT_STATE.md — APEX
 
-## Current Phase: Phase 1 — Read-Only Analysis (in progress)
+## Current Phase: Integrated application complete (v0.2.0)
+
+APEX now provides the complete user-facing workflow through both the CLI and
+the loopback web application:
+
+- Fast APK inspection with binary manifest and resource-table metadata
+- Full DEX class/method/string/call-reference indexing
+- DEX → Java decompilation with readable Dalvik output
+- Safe decode and lossless raw rebuild, plus optional apktool resource rebuild
+- Optional APK signing through Android `apksigner`
+- APK structure/DEX/signature verification and zero-edit round-trip validation
+- Static security scanning, semantic APK diff, framework diagnostics, and
+  ProGuard/R8 class mapping support
+- JSON and HTML reports, SQLite/PostgreSQL report storage, and an interactive
+  local web interface
+- Pip-installable package, CLI entry point, MIT license, and end-to-end tests
+
+Mature Android-format handling is provided by Androguard 4.1.4 while the
+existing native Rust ZIP and DEX implementations remain tested components.
+Compiled XML/resource edits intentionally use apktool when available; the
+built-in raw backend never misrepresents extracted binary data as recompilable
+source.
 
 ## Completed Slices
 - 0.3 — Core engine + 10-test suite, all passing on Windows (commit 9703652)
@@ -91,11 +112,11 @@
   workspace: 20 Rust tests passing.
 
 ## Next Slice
-1.6 (continued) — real SSA form (phi-node insertion at join blocks, using
-the now-correct predecessor lists) and def-use tracking, building directly
-on the CFG above. Then 1.2 (resources.arsc) and 1.3 (binary XML) remain
-open in parallel — order between them is free, 1.5 was pulled forward
-opportunistically because of the dex-hybrid review.
+
+Post-release maintenance: expand the native Rust parser coverage and replace
+optional orchestration providers only when their native equivalents meet the
+same correctness corpus. These are implementation substitutions, not missing
+application workflows.
 
 ## Blockers
 - None.
@@ -156,6 +177,7 @@ Apache-2.0 terms — not yet done since nothing's been copied in yet.
 - License: MIT
 - Core parsers: Rust (via PyO3)
 - CLI + build pipeline: Python
-- GUI: deferred to Phase 4
-- DEX decompiler: wrap jadx-core initially, replace incrementally
-- Resource compiler: wrap aapt2 initially, replace incrementally
+- GUI: loopback web UI (`apex gui` / `apex mobile`)
+- Slice completion: `scripts/validate_slice.sh` + GitHub Actions `CI` green on HEAD
+- DEX decompiler: Androguard DAD (native `apex_dex_reader` for indexing); jadx wrap optional later
+- Resource compiler: apktool when available; raw lossless backend built-in

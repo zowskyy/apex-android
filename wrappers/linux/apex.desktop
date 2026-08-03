@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=APEX
+Comment=Android Package EXaminer — local web UI
+Exec=bash -lc 'wrappers/linux/apex-gui.sh'
+Path=%k
+Icon=utilities-terminal
+Terminal=true
+Categories=Development;Security;
+Keywords=android;apk;reverse-engineering;security;

@@ -16,6 +16,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "apex_dex_reader"
+version = "0.1.0"
+dependencies = [
+ "apex_dex_parser",
+ "pyo3",
+]
+
+[[package]]
 name = "apex_zip_reader"
 version = "0.1.0"
 dependencies = [

@@ -1,0 +1,65 @@
+name: Android standalone APK
+
+on:
+  push:
+    branches: [master, main, "cursor/**"]
+    paths:
+      - "wrappers/android/standalone/**"
+      - "wrappers/android/build_standalone.sh"
+      - "build_standalone.sh"
+      - "apex/**"
+      - ".github/workflows/android-standalone.yml"
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10.2"
+
+      - name: Install SDK packages
+        run: |
+          sdkmanager --install "platforms;android-34" "build-tools;34.0.0"
+          yes | sdkmanager --licenses >/dev/null || true
+
+      - name: Build APEX standalone APK
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
+        run: |
+          chmod +x wrappers/android/build_standalone.sh
+          bash wrappers/android/build_standalone.sh
+          ls -la wrappers/android/dist/apex-mobile.apk
+
+      - name: Package standalone artifact with README
+        run: |
+          VER="$(python -c 'from apex.version import __version__; print(__version__)')"
+          cat > wrappers/android/dist/WHICH_APK.txt << EOF
+          APEX MOBILE APK (apex-mobile.apk) — version ${VER}
+          Full engine on phone + optional desktop remote in Settings.
+          Menu: Settings (not Server URL). App name: APEX
+          EOF
+          cd wrappers/android/dist
+          zip -j apex-mobile-apk.zip apex-mobile.apk WHICH_APK.txt
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apex-mobile-apk
+          path: wrappers/android/dist/apex-mobile-apk.zip
+          if-no-files-found: error

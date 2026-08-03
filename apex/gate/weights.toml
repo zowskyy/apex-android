@@ -1,0 +1,35 @@
+# APEX hard-gate scanner weights (must sum to 1.0).
+# Blueprint §5 — manifest through dependency/CVE advisory scanners.
+
+[weights]
+manifest = 0.15
+dex = 0.10
+security = 0.15
+secrets = 0.15
+native = 0.15
+api_watch = 0.10
+netsec = 0.05
+lint = 0.05
+dependency = 0.05
+obfuscation = 0.05
+
+# Scanner blast-radius metadata (for triage — not used in scoring).
+[meta.manifest]
+false_positive_rate = 0.02
+mttr_hours = 4
+notes = "exported components, sensitive permissions without maxSdkVersion"
+
+[meta.secrets]
+false_positive_rate = 0.08
+mttr_hours = 6
+notes = "test fixtures, encoded strings — review evidence before override"
+
+[meta.dependency]
+false_positive_rate = 0.15
+mttr_hours = 8
+notes = "advisory only (WARN); prefix-only CVE matches"
+
+[meta.api_watch]
+false_positive_rate = 0.10
+mttr_hours = 4
+notes = "crypto/reflection watchlist — lightweight tier downgrades to WARN"

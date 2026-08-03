@@ -1,0 +1,15 @@
+# Deprecated — use Android standalone APK workflow only.
+# Companion thin client is no longer published.
+name: Android client APK (deprecated)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  noop:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "This workflow is deprecated."
+          echo "Build the mobile APK with: bash build_standalone.sh"
+          echo "Or GitHub Actions -> Android standalone APK"

@@ -1,0 +1,42 @@
+name: Supply Chain
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: pip-audit + SBOM
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          pip install pip-audit cyclonedx-bom || true
+          pip-audit || echo "pip-audit findings — review advisory"
+          python scripts/release/generate_sbom.py sbom.json
+          ls -la sbom.json
+
+      - name: cargo audit
+        run: |
+          cargo install cargo-audit 2>/dev/null || true
+          cargo audit || echo "cargo audit findings — review advisory"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: supply-chain-report
+          path: |
+            sbom.json
+          if-no-files-found: warn

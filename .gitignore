@@ -2,6 +2,9 @@ __pycache__/
 *.pyc
 *.pyo
 .pytest_cache/
+.venv/
+.apex-web/
+androguard.db
 apex_out/
 work/
 extracted/
@@ -14,3 +17,10 @@ target/
 tests/fixtures/
 tools/mobile_test_app/build/
 tools/mobile_test_app/debug.keystore
+wrappers/android/build/
+wrappers/android/debug.keystore
+wrappers/android/dist/
+wrappers/macos/dist/
+.coverage
+release-staging/
+.version-sync.lock

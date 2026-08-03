@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "apex": {
+      "command": "apex",
+      "args": ["mcp"],
+      "env": {
+        "APEX_LICENSE_KEY": "APEX-PRO-REPLACE_WITH_YOUR_KEY",
+        "APEX_ENTITLEMENT": "demo"
+      }
+    }
+  }
+}

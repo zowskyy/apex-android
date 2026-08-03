@@ -1,0 +1,122 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "APEX: Build phone client APK",
+      "type": "shell",
+      "command": "bash wrappers/android/build.sh",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "ANDROID_HOME": "${env:ANDROID_HOME}",
+          "ANDROID_SDK_ROOT": "${env:ANDROID_SDK_ROOT}"
+        }
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "APEX: Install APK on phone (adb)",
+      "type": "shell",
+      "command": "ls -la wrappers/android/dist/apex-client.apk && adb install -r wrappers/android/dist/apex-client.apk",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "dependsOn": [],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "APEX: Build + install phone APK",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "APEX: Build phone client APK",
+        "APEX: Install APK on phone (adb)"
+      ],
+      "problemMatcher": [],
+      "group": "build"
+    },
+    {
+      "label": "APEX: Start mobile server (phone browser)",
+      "type": "shell",
+      "command": "${workspaceFolder}/.venv/bin/apex mobile || python -m apex mobile",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "APEX: Build standalone phone APK",
+      "type": "shell",
+      "command": "bash build_standalone.sh",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "ANDROID_HOME": "${env:ANDROID_HOME}",
+          "ANDROID_SDK_ROOT": "${env:ANDROID_SDK_ROOT}"
+        }
+      },
+      "group": "build",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "APEX: Install standalone APK on phone (adb)",
+      "type": "shell",
+      "command": "ls -la wrappers/android/dist/apex-mobile.apk && adb install -r wrappers/android/dist/apex-mobile.apk",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "APEX: Build + install standalone phone APK",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "APEX: Build standalone phone APK",
+        "APEX: Install standalone APK on phone (adb)"
+      ],
+      "problemMatcher": [],
+      "group": "build"
+    },
+      "type": "shell",
+      "command": "bash build.sh --skip-tests --release",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "group": "build"
+    },
+    {
+      "label": "APEX: Validate slice (local CI mirror)",
+      "type": "shell",
+      "command": "bash scripts/validate_slice.sh",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

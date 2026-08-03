@@ -1,0 +1,24 @@
+name: Hard Gate
+
+on:
+  push:
+    branches: [master, main, "cursor/**"]
+  pull_request:
+
+jobs:
+  hard-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run 9-slice hard gate (G1–G8 + validate_slice)
+        run: |
+          chmod +x scripts/hard_gate.sh
+          bash scripts/hard_gate.sh

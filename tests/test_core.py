@@ -2,18 +2,23 @@
 Slice 0.3 verification tests — runs against real APKs if available,
 falls back to synthetic fixtures if not.
 """
-import json
-import zipfile
-import tempfile
-from pathlib import Path
+
 import sys
+import zipfile
+from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from apex import (
-    sha256_file, inventory_files, scan_resources,
-    scan_native_libs, scan_dex_metadata,
-    build_crossrefs, build_reachability,
-    diff_indexes, export_minimal_bundle,
+    build_crossrefs,
+    build_reachability,
+    diff_indexes,
+    export_minimal_bundle,
+    inventory_files,
+    scan_dex_metadata,
+    scan_native_libs,
+    scan_resources,
+    sha256_file,
 )
 
 
@@ -88,7 +93,11 @@ def test_build_reachability(tmp_path):
 
 
 def test_diff_indexes_identical():
-    idx = {"classes": [{"name": "A"}], "methods": [{"class": "A", "name": "foo"}], "dex_files": ["classes.dex"]}
+    idx = {
+        "classes": [{"name": "A"}],
+        "methods": [{"class": "A", "name": "foo"}],
+        "dex_files": ["classes.dex"],
+    }
     d = diff_indexes(idx, idx)
     assert d["classes_added"] == []
     assert d["classes_removed"] == []
@@ -96,7 +105,11 @@ def test_diff_indexes_identical():
 
 def test_diff_indexes_change():
     left = {"classes": [{"name": "A"}], "methods": [], "dex_files": ["classes.dex"]}
-    right = {"classes": [{"name": "B"}], "methods": [], "dex_files": ["classes.dex", "classes2.dex"]}
+    right = {
+        "classes": [{"name": "B"}],
+        "methods": [],
+        "dex_files": ["classes.dex", "classes2.dex"],
+    }
     d = diff_indexes(left, right)
     assert "B" in d["classes_added"]
     assert "A" in d["classes_removed"]

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">APEX</string>
+    <string name="settings_title">APEX Settings</string>
+    <string name="settings_headline">Engine &amp; remote access</string>
+    <string name="settings_intro">Analyze APKs on this phone by default. Connect a desktop running apex mobile when you want more speed — same as remote access from any browser on your network.</string>
+    <string name="server_hint">http://192.168.1.42:8765</string>
+    <string name="save">Save &amp; reopen</string>
+    <string name="settings_saved">Saved — reopening APEX</string>
+    <string name="open_settings">Settings</string>
+    <string name="choose_apk">Choose APK</string>
+    <string name="mode_on_device">On this phone (offline)</string>
+    <string name="mode_remote">Desktop computer (remote)</string>
+    <string name="remote_url_label">Desktop URL</string>
+    <string name="remote_url_help">On your PC (same Wi‑Fi): run apex mobile — paste the printed address here. Example: http://192.168.1.42:8765</string>
+    <string name="remote_url_invalid">URL must start with http:// or https://</string>
+    <string name="remote_connecting">Connecting to desktop server…</string>
+    <string name="engine_starting">Starting on-device engine…</string>
+    <string name="engine_loading_modules">Loading analysis modules…</string>
+    <string name="engine_first_launch_hint">First launch can take 2–3 minutes. Keep the app open.</string>
+    <string name="engine_timeout">Engine timed out. Try Settings → Desktop computer, or reinstall.</string>
+    <string name="engine_notification_title">APEX analysis engine</string>
+    <string name="engine_notification_body">Running on your phone</string>
+    <string name="engine_notification_starting">Starting APEX engine…</string>
+    <string name="disclaimer_title">Acceptable Use Notice</string>
+    <string name="disclaimer_subtitle">Science · Innovation · Education · Constructive creation</string>
+    <string name="disclaimer_agree">I Agree — continue</string>
+    <string name="disclaimer_decline">Decline and exit</string>
+    <string name="disclaimer_declined">Disclaimer declined. APEX will not open.</string>
+    <string name="disclaimer_footer">You must accept to use APEX. See docs/ACCEPTABLE_USE.md</string>
+    <string name="disclaimer_body">APEX is built for science, innovation, education, security research, defensive analysis, and constructive software engineering.\n\nIts reverse-engineering and rebuild capabilities are intentionally broad so legitimate researchers and creators are not artificially blocked.\n\nAPEX must NOT be used to harm people, steal, defraud, stalk, harass, distribute malware, violate computer-crime laws, or otherwise cause unlawful damage. The authors and distributors do not authorize, encourage, or condone such use, and accept NO responsibility for how you use this program if you use it to cause harm.\n\nYou alone are responsible for complying with applicable law. If you misuse APEX, you may face civil legal action and, where applicable, criminal investigation and prosecution by the proper authorities. The authors and rights holders intend to pursue available civil remedies and to cooperate with law enforcement to the fullest extent permitted by law.\n\nCapability is unrestricted because this project prioritizes positive productivity and creation — not because harmful use is tolerated. Any attempt to use APEX outside that spirit may be pursued to the fullest extent of the law.\n\nBy tapping I Agree, you confirm you have read this notice and will use APEX only in the spirit of education, research, and constructive innovation.</string>
+</resources>
