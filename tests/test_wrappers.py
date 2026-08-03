@@ -20,9 +20,11 @@ def test_wrapper_files_exist():
         "build_standalone.sh",
         "wrappers/android/build_standalone.sh",
         "docs/BUILD_STANDALONE_APK.md",
-        "scripts/validate_slice.sh",
+        "scripts/hard_gate.sh",
         "scripts/check_github_ci.sh",
         ".cursor/skills/finished-product-delivery/SKILL.md",
+        ".cursor/skills/mobile-hard-gate/SKILL.md",
+        ".cursor/skills/hard-gate/SKILL.md",
     ]
     for relative in required:
         assert (root / relative).is_file(), relative

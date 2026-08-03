@@ -11,6 +11,7 @@ Claude Code desktop, Claude Code mobile).
 mkdir -p ~/.cursor/skills
 cp -r .cursor/skills/finished-product-delivery ~/.cursor/skills/
 cp -r .cursor/skills/mobile-hard-gate ~/.cursor/skills/
+cp -r .cursor/skills/hard-gate ~/.cursor/skills/
 ```
 
 Or symlink:
@@ -18,6 +19,7 @@ Or symlink:
 ```bash
 ln -sf "$(pwd)/.cursor/skills/finished-product-delivery" ~/.cursor/skills/
 ln -sf "$(pwd)/.cursor/skills/mobile-hard-gate" ~/.cursor/skills/
+ln -sf "$(pwd)/.cursor/skills/hard-gate" ~/.cursor/skills/
 ```
 
 ### Claude Code
@@ -43,6 +45,7 @@ Project-specific rules live in `AGENTS.md` and `docs/PRINCIPLES.md`.
 |-------|-------------|
 | `finished-product-delivery` | Every project — scope, wiring, CI, marketplace |
 | `mobile-hard-gate` | Mobile APK, WebView shells, Chaquopy, store/Releases |
+| `hard-gate` | 9-slice Phase 1–3 + ship (`scripts/hard_gate.sh`) |
 
 ## What it covers
 

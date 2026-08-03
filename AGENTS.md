@@ -11,8 +11,9 @@ that would defer core capability.
 
 Follow `.cursor/skills/finished-product-delivery/SKILL.md` (install per
 `.cursor/skills/README.md`). For mobile APK / Android standalone, also follow
-`.cursor/skills/mobile-hard-gate/SKILL.md`. It requires **GitHub CI validation**
-before any slice is declared done — not only local tests.
+`.cursor/skills/mobile-hard-gate/SKILL.md`. Before push or release, run
+`bash scripts/hard_gate.sh` (see `.cursor/skills/hard-gate/SKILL.md`). It requires
+**GitHub CI validation** before any slice is declared done — not only local tests.
 
 ## Architecture (this repo)
 
@@ -31,6 +32,8 @@ before any slice is declared done — not only local tests.
 ```bash
 ./build.sh --skip-tests          # install + native extensions
 scripts/validate_slice.sh        # mirror GitHub CI locally — run before push
+scripts/hard_gate.sh             # 9-slice Phase 1–3 gate (G1–G8 + validate_slice)
+scripts/hard_gate.sh --ship      # + GitHub CI + Android APK green on HEAD
 scripts/check_github_ci.sh       # after push: verify Actions green on HEAD
 scripts/check_github_ci.sh --apk # before mobile APK handoff: CI + standalone APK green
 ```
@@ -49,7 +52,7 @@ cargo test --workspace
 ## Slice completion (required)
 
 1. Implement and wire end-to-end (CLI + web + tests + docs).
-2. `scripts/validate_slice.sh` — must pass.
+2. `scripts/hard_gate.sh` or `scripts/validate_slice.sh` — must pass before push.
 3. `git push` to the PR branch.
 4. GitHub Actions workflow **`CI`** must show **success** on the pushed `HEAD`.
 5. `scripts/check_github_ci.sh` (or `gh run list`) — confirm before telling the

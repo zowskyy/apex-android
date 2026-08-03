@@ -4,7 +4,9 @@ APEX release install guide
 Pick the file for your platform from the GitHub Releases page:
 
   Android phone (Galaxy, Pixel, etc.)
-    APEX-Mobile-<version>.apk     — install directly (Settings may require "unknown apps")
+    APEX-Mobile-<version>.apk     — install this on your phone (not the .zip)
+    APEX-Mobile-<version>-android.zip — download bundle; in APEX app you can
+      analyze this ZIP or the .apk inside it (same release)
     APEX-Mobile-<version>.aab     — for Play Store / bundletool (advanced)
 
   Windows 10/11 (64-bit)

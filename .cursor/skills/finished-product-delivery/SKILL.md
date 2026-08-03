@@ -138,6 +138,7 @@ Claims like "tests pass", "CI green", or "ready to merge" require evidence from
 6. Never give users APK download links or “install this build” unless `scripts/check_github_ci.sh --apk` passes on that commit.
 7. If CI fails, fix, push again, and re-verify — do not declare the slice done on a failed run.
 8. For mobile/Android: also follow `.cursor/skills/mobile-hard-gate/SKILL.md` (WebView file picker, Chaquopy deps, device smoke, Releases gate).
+9. Before push: `bash scripts/hard_gate.sh`; before release handoff: `bash scripts/hard_gate.sh --ship --release vX.Y.Z` (see `hard-gate` skill).
 
 ### Slice exit (Salami cycle)
 
