@@ -10,9 +10,15 @@ def test_android_chaquopy_lists_transitive_python_deps():
         "jinja2",
         "cffi",  # cryptography
         "pycparser",
-        "mutf8",  # androguard dex
         "loguru",
         "androguard",
     ]
     missing = [pkg for pkg in required if pkg not in gradle]
     assert not missing, f"build.gradle missing Chaquopy pip installs: {missing}"
+
+
+def test_android_vendored_mutf8_for_chaquopy():
+    """mutf8 has no Chaquopy wheel; pure-Python copy lives in src/main/python."""
+    base = Path("wrappers/android/standalone/app/src/main/python/mutf8")
+    assert (base / "__init__.py").is_file()
+    assert (base / "mutf8.py").is_file()
