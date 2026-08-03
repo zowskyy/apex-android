@@ -187,8 +187,10 @@ Before declaring a slice complete or telling users CI passed:
 2. Push to the feature/PR branch.
 3. Wait for workflow `CI` to finish.
 4. Confirm `conclusion: success` on the `HEAD` commit (`scripts/check_github_ci.sh` or GitHub UI).
+5. Before telling users to install a mobile APK: `scripts/check_github_ci.sh --apk` must pass (CI + **Android standalone APK** green on `HEAD`).
 
 Never claim validation complete on failed or in-progress CI runs.
+Never hand users an APK link or “download this” instructions unless step 5 passed for that commit.
 
 Salami cycle:
 

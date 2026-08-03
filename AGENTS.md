@@ -31,6 +31,7 @@ slice is declared done — not only local tests.
 ./build.sh --skip-tests          # install + native extensions
 scripts/validate_slice.sh        # mirror GitHub CI locally — run before push
 scripts/check_github_ci.sh       # after push: verify Actions green on HEAD
+scripts/check_github_ci.sh --apk # before mobile APK handoff: CI + standalone APK green
 ```
 
 Equivalent manual steps:

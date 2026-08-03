@@ -133,9 +133,10 @@ Claims like "tests pass", "CI green", or "ready to merge" require evidence from
 1. After push, wait for workflow `CI` to complete (do not assume success from push alone).
 2. Verify `conclusion: success` on the commit you are finishing — use GitHub UI or `gh run list`.
 3. Run `scripts/validate_slice.sh` locally before push (mirrors `.github/workflows/ci.yml`).
-4. After push, run `scripts/check_github_ci.sh` when `gh` is available.
+4. After push, run `scripts/check_github_ci.sh` when `gh` is available (`--apk` before any mobile APK handoff).
 5. Never tell the user CI passed if the latest run on HEAD failed or is still `in_progress`.
-6. If CI fails, fix, push again, and re-verify — do not declare the slice done on a failed run.
+6. Never give users APK download links or “install this build” unless `scripts/check_github_ci.sh --apk` passes on that commit.
+7. If CI fails, fix, push again, and re-verify — do not declare the slice done on a failed run.
 
 ### Slice exit (Salami cycle)
 
@@ -179,6 +180,7 @@ update PROJECT_STATE.md → mark slice done
 - [ ] `scripts/validate_slice.sh` passed locally before push
 - [ ] Changes pushed to the PR/feature branch
 - [ ] GitHub Actions workflow `CI` **success** on current `HEAD` (verified via UI or `scripts/check_github_ci.sh`)
+- [ ] Mobile APK handoff only if `Android standalone APK` **success** on same `HEAD` (`scripts/check_github_ci.sh --apk`)
 - [ ] No "ready to ship" / "CI passes" claim without the green run URL or check output
 
 ---
