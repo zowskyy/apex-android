@@ -143,7 +143,7 @@ flowchart TB
 
 | ID | Slice | Status | Innovation | Exit | Gate |
 |----|-------|--------|------------|------|------|
-| S-1 | **Native ELF inspector** | ⬜ | Open `.so` — GNU_STACK, dangerous symbols, no stack protector | `scan_native_libs` → ELF section | `native` 0.10 |
+| S-1 | **Native ELF inspector** | 🟡 | Open `.so` — PIE, GNU_STACK, 16K align | `native_scan` in gate + security_scan | `native` 0.10 |
 | S-2 | **Dependency fingerprint** | ⬜ | Hash `lib/**` + Gradle clues → library ID table | okhttp in libs → reported version band | `deps` 0.10 |
 | S-3 | **Layout / a11y static** | ⬜ | Decode `res/layout` via existing XML path | Missing `contentDescription` on clickable | `a11y` 0.05 |
 | S-4 | **Reachability report export** | 🟡 | Dead code from *our* graph, not MobSF | HTML section + `apex report --reachability` | `reachability` 0.05 |

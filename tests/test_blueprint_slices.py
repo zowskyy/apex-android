@@ -15,7 +15,18 @@ from tests.test_workflows import make_apk
 def test_gate_weights_sum_to_one() -> None:
     weights = load_scanner_weights()
     validate_weights(weights)
-    assert set(weights.keys()) >= {"manifest", "dex", "security", "secrets", "native", "dex_watch"}
+    assert set(weights.keys()) >= {
+        "manifest",
+        "dex",
+        "security",
+        "secrets",
+        "native",
+        "api_watch",
+        "netsec",
+        "lint",
+        "dependency",
+        "obfuscation",
+    }
 
 
 def test_scan_text_for_secrets_attributes_source() -> None:

@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Literal
 
+Confidence = Literal["HIGH", "MEDIUM", "LOW"]
+
 
 class GateStatus(str, Enum):
     PASS = "PASS"
@@ -16,6 +18,13 @@ class GateStatus(str, Enum):
 GateStage = Literal["candidate", "rc", "beta", "production"]
 
 
+def normalize_status(status: GateStatus, confidence: Confidence) -> GateStatus:
+    """LOW-confidence FAIL is downgraded to WARN (advisory scanners)."""
+    if status == GateStatus.FAIL and confidence == "LOW":
+        return GateStatus.WARN
+    return status
+
+
 @dataclass
 class GateFinding:
     scanner: str
@@ -24,6 +33,8 @@ class GateFinding:
     message: str
     evidence: str = ""
     weight: float = 1.0
+    confidence: Confidence = "HIGH"
+    remediation: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -33,6 +44,8 @@ class GateFinding:
             "message": self.message,
             "evidence": self.evidence,
             "weight": self.weight,
+            "confidence": self.confidence,
+            "remediation": self.remediation,
         }
 
 

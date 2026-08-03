@@ -729,10 +729,36 @@ def security_scan(apk_path: Path) -> dict[str, Any]:
 
     from .native_scan import scan_apk_native_libs
 
-    for item in scan_apk_native_libs(apk_path):
+    min_sdk: int | None = None
+    try:
+        manifest_info = inspect_apk(apk_path).get("manifest") or {}
+        raw_ms = str(manifest_info.get("min_sdk") or "").strip()
+        if raw_ms:
+            min_sdk = int(raw_ms)
+    except (TypeError, ValueError, OSError):
+        min_sdk = None
+
+    for item in scan_apk_native_libs(apk_path, min_sdk=min_sdk):
         findings.append(item)
 
-    order = {"low": 1, "medium": 2, "high": 3, "critical": 4}
+    from .netsec_scan import scan_network_security
+
+    for item in scan_network_security(apk_path):
+        findings.append(item)
+
+    from .api_watch import scan_apk_api_watch
+    from .gate.scanners.watchlists.crypto import CRYPTO_WATCHLIST
+    from .gate.scanners.watchlists.reflection import REFLECTION_WATCHLIST
+
+    for item in scan_apk_api_watch(apk_path, CRYPTO_WATCHLIST + REFLECTION_WATCHLIST):
+        findings.append(item)
+
+    from .dependency_scan import scan_apk_dependencies
+
+    for item in scan_apk_dependencies(apk_path):
+        findings.append(item)
+
+    order = {"low": 1, "medium": 2, "high": 3, "critical": 4, "info": 0}
     highest = max((order[item["severity"]] for item in findings), default=0)
     verdict = "HIGH_RISK" if highest >= 3 else ("REVIEW" if findings else "CLEAN")
     return {

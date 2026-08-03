@@ -7,12 +7,16 @@ from typing import Any
 
 _WEIGHTS_PATH = Path(__file__).resolve().parent / "weights.toml"
 _DEFAULT_WEIGHTS: dict[str, float] = {
-    "manifest": 0.25,
-    "dex": 0.15,
-    "security": 0.30,
-    "secrets": 0.18,
-    "native": 0.10,
-    "dex_watch": 0.02,
+    "manifest": 0.15,
+    "dex": 0.10,
+    "security": 0.15,
+    "secrets": 0.15,
+    "native": 0.15,
+    "api_watch": 0.10,
+    "netsec": 0.05,
+    "lint": 0.05,
+    "dependency": 0.05,
+    "obfuscation": 0.05,
 }
 
 

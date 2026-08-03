@@ -1,10 +1,14 @@
 # APEX hard-gate scanner weights (must sum to 1.0).
-# Edit here when adding scanners — runner loads this file (Slice XS-7).
+# Blueprint §5 — manifest through dependency/CVE advisory scanners.
 
 [weights]
-manifest = 0.25
-dex = 0.15
-security = 0.30
-secrets = 0.18
-native = 0.10
-dex_watch = 0.02
+manifest = 0.15
+dex = 0.10
+security = 0.15
+secrets = 0.15
+native = 0.15
+api_watch = 0.10
+netsec = 0.05
+lint = 0.05
+dependency = 0.05
+obfuscation = 0.05

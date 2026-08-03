@@ -123,6 +123,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="exit 1 if gate_passed is false (for pipelines)",
     )
 
+    sub.add_parser(
+        "update-db",
+        help="refresh bundled CVE library database in ~/.apex/cve_db.json",
+    )
+
     sub.add_parser("doctor", help="show parser and external tool availability")
 
     gui_cmd = sub.add_parser("gui", aliases=["serve"], help="start the local web interface")
@@ -278,6 +283,12 @@ def main(argv: list[str] | None = None) -> int:
                 for issue in report.blocking:
                     print(f"BLOCK: {issue}", file=sys.stderr)
                 return 5
+            return 0
+        elif args.command == "update-db":
+            from .dependency_scan import update_cve_db_from_bundle
+
+            path = update_cve_db_from_bundle()
+            print(f"CVE database updated: {path}")
             return 0
         elif args.command == "doctor":
             _print(doctor())

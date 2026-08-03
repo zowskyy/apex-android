@@ -1,0 +1,39 @@
+# Default APEX lint rules (blueprint LINT-2). Regex over decompiled Java sources.
+# Users may override by placing lint_rules.yaml beside the project or in workspace.
+
+rules:
+  - id: trust-all-trustmanager
+    pattern: 'checkServerTrusted\\([^)]*\\)\\s*\\{[^}]*return\\s*;'
+    severity: high
+    message: "TrustManager may accept all certificates — MITM risk"
+    applies_to: "**/*.java"
+
+  - id: trust-all-hostname
+    pattern: 'verify\\([^)]*\\)\\s*\\{[^}]*return\\s+true'
+    severity: high
+    message: "HostnameVerifier may accept all hostnames — MITM risk"
+    applies_to: "**/*.java"
+
+  - id: webview-js-interface
+    pattern: 'addJavascriptInterface\\('
+    severity: medium
+    message: "WebView addJavascriptInterface — review for RCE on older APIs"
+    applies_to: "**/*.java"
+
+  - id: webview-js-enabled
+    pattern: 'setJavaScriptEnabled\\(\\s*true\\s*\\)'
+    severity: low
+    message: "WebView JavaScript enabled — review exposure surface"
+    applies_to: "**/*.java"
+
+  - id: world-readable
+    pattern: 'MODE_WORLD_READABLE|MODE_WORLD_WRITEABLE'
+    severity: medium
+    message: "Legacy world-readable/writable file mode"
+    applies_to: "**/*.java"
+
+  - id: log-secrets
+    pattern: 'Log\\.[dv]\\([^)]*(password|token|secret|apikey|api_key)'
+    severity: low
+    message: "Logging may leak credential-like variable names"
+    applies_to: "**/*.java"
