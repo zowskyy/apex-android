@@ -1,0 +1,43 @@
+APEX release install guide
+==========================
+
+Pick the file for your platform from the GitHub Releases page:
+
+  Android phone (Galaxy, Pixel, etc.)
+    APEX-Mobile-<version>.apk     — install directly (Settings may require "unknown apps")
+    APEX-Mobile-<version>.aab     — for Play Store / bundletool (advanced)
+
+  Windows 10/11 (64-bit)
+    APEX-<version>-windows-x64.zip
+    1. Extract anywhere (e.g. C:\APEX)
+    2. Double-click install.ps1 (or: powershell -ExecutionPolicy Bypass -File install.ps1)
+    3. Use Desktop shortcuts APEX.bat and APEX Mobile.bat
+
+  macOS 11+ (Apple Silicon or Intel)
+    APEX-<version>-macos.zip
+    1. Extract
+    2. Run: bash install.sh
+    3. Open APEX.app or APEX Mobile.app from this folder
+
+  Linux (x86_64)
+    APEX-<version>-linux-x64.tar.gz
+    1. tar xzf APEX-*-linux-x64.tar.gz && cd APEX-*-linux-x64
+    2. bash install.sh
+    3. Run wrappers/linux/apex-gui.sh or find APEX in your app menu
+
+  iPhone / iPad (no install file)
+    Run apex mobile on your computer, open the URL in Safari, Add to Home Screen.
+    See wrappers/ios/README.md in the source repo.
+
+Requirements (desktop)
+  - Python 3.10+ (install.sh creates .venv and installs bundled wheels)
+  - Optional: apktool, apksigner, Java — run apex doctor after install
+
+First run
+  apex doctor
+  apex gui          # local desktop UI
+  apex mobile       # phone browser on Wi-Fi (http://<pc-ip>:8765)
+
+Android first launch
+  Allow notifications, wait 2–3 minutes on the loading screen for the on-device engine.
+  Menu: Settings (not "Server URL"). Optional PC boost: Settings → Desktop computer.

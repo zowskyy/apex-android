@@ -21,8 +21,8 @@ build_app() {
   <key>CFBundleIdentifier</key><string>io.apex.${name}</string>
   <key>CFBundleName</key><string>${name}</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>0.2.0</string>
-  <key>CFBundleVersion</key><string>0.2.0</string>
+  <key>CFBundleShortVersionString</key><string>0.4.1</string>
+  <key>CFBundleVersion</key><string>0.4.1</string>
   <key>LSMinimumSystemVersion</key><string>11.0</string>
 </dict></plist>
 EOF

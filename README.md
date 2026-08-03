@@ -7,6 +7,9 @@ round trips, compares packages, and reports static security signals.
 
 ## Install
 
+**Download (no git required):** [GitHub Releases](https://github.com/zowskyy/apex-android/releases) —
+Windows `.zip`, macOS `.zip`, Linux `.tar.gz`, and **APEX Mobile** `.apk` / `.aab`.
+
 ```bash
 python -m venv .venv
 . .venv/bin/activate
