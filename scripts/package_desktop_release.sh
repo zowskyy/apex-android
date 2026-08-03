@@ -33,15 +33,15 @@ if [[ -n "${CORE_WHEEL_DIR:-}" && -d "$CORE_WHEEL_DIR" ]] && compgen -G "$CORE_W
   echo "==> Using pre-built wheels from $CORE_WHEEL_DIR"
   cp "$CORE_WHEEL_DIR"/*.whl "$STAGE/wheels/"
 elif [[ -n "${CORE_WHEEL:-}" ]]; then
-  first_wheel=$(echo "$CORE_WHEEL" | awk '{print $1}')
-  if [[ -f "$first_wheel" ]]; then
-    echo "==> Using CORE_WHEEL: $CORE_WHEEL"
-    # shellcheck disable=SC2086
-    cp $CORE_WHEEL "$STAGE/wheels/"
-  else
-    echo "CORE_WHEEL set but file missing: $first_wheel" >&2
+  shopt -s nullglob
+  wheels=( $CORE_WHEEL )
+  shopt -u nullglob
+  if [[ ${#wheels[@]} -eq 0 ]]; then
+    echo "CORE_WHEEL matched no files: ${CORE_WHEEL}" >&2
     exit 1
   fi
+  echo "==> Using CORE_WHEEL (${#wheels[@]} file(s)): ${CORE_WHEEL}"
+  cp "${wheels[@]}" "$STAGE/wheels/"
 else
   echo "==> CORE_WHEEL_DIR not set — building from source (local dev mode)"
   python -m pip install -q --upgrade pip wheel maturin
@@ -56,7 +56,13 @@ python -m pip download -d "$STAGE/wheels" \
 
 echo "==> Copying wrappers and metadata"
 cp LICENSE README.md pyproject.toml "$STAGE/"
-cp -R wrappers "$STAGE/"
+mkdir -p "$STAGE/wrappers"
+if command -v rsync >/dev/null 2>&1; then
+  rsync -a --exclude='android/standalone' wrappers/ "$STAGE/wrappers/"
+else
+  cp -R wrappers "$STAGE/"
+  rm -rf "$STAGE/wrappers/android/standalone"
+fi
 cp scripts/release/INSTALL.txt "$STAGE/"
 
 case "$PLATFORM" in

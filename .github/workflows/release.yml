@@ -201,8 +201,44 @@ jobs:
           path: release-staging/APEX-*-macos.zip
           if-no-files-found: error
 
+  release-verify:
+    needs: [prepare, android]
+    runs-on: ubuntu-latest
+    if: github.ref_type == 'tag'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-release
+          path: release-staging/android
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Gate release APK
+        run: |
+          python -m pip install --upgrade pip wheel maturin
+          pip install -e ".[dev]"
+          maturin develop --release -m core/zip_reader/Cargo.toml
+          maturin develop --release -m core/dex_reader/Cargo.toml
+          APK="$(ls release-staging/android/APEX-Mobile-*.apk | head -n1)"
+          echo "Verifying $APK"
+          apex gate "$APK" --msv 21 --stage candidate --ci -o gate-release.json
+          cat gate-release.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gate-release-report
+          path: gate-release.json
+          if-no-files-found: error
+
   publish:
-    needs: [prepare, android, desktop-linux, desktop-windows, desktop-macos]
+    needs: [prepare, android, desktop-linux, desktop-windows, desktop-macos, release-verify]
     runs-on: ubuntu-latest
     if: github.ref_type == 'tag'
     steps:
