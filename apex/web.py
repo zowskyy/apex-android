@@ -24,6 +24,7 @@ from .analysis import (
 )
 from .device_profile import doctor_fields
 from .device_profile import limits as device_limits
+from .web_security import resolve_client_package_path
 from .workflows import decompile_apk, doctor, security_scan
 
 WEB_APP = r"""<!doctype html>
@@ -182,8 +183,21 @@ class ApexWebHandler(BaseHTTPRequestHandler):
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise ApexError("request body must be JSON") from exc
 
+    def _workspace(self) -> Path:
+        return Path(getattr(self.server, "workspace"))
+
+    def _enforce_workspace_paths(self) -> bool:
+        return bool(getattr(self.server, "enforce_workspace_paths", False))
+
+    def _client_package_path(self, raw: str) -> Path:
+        return resolve_client_package_path(
+            raw,
+            self._workspace(),
+            enforce_workspace=self._enforce_workspace_paths(),
+        )
+
     def _analyze_path(self, path: Path) -> dict:
-        workspace = Path(getattr(self.server, "workspace"))
+        workspace = self._workspace()
         resolved, container = resolve_android_package(path, workspace)
         dex = {"classes": [], "methods": [], "edges": [], "errors": []}
         lightweight = getattr(self.server, "dex_lightweight", False)
@@ -234,14 +248,15 @@ class ApexWebHandler(BaseHTTPRequestHandler):
         try:
             if route.path == "/api/open":
                 payload = self._payload()
-                self._json(self._analyze_path(Path(str(payload.get("path", "")))))
+                package = self._client_package_path(str(payload.get("path", "")))
+                self._json(self._analyze_path(package))
                 return
             if route.path == "/api/upload":
                 filename = parse_qs(route.query).get("name", ["application.apk"])[0]
                 safe_name = sanitized_zip_name(Path(filename).name)
                 if not safe_name:
                     raise ApexError("invalid upload filename")
-                upload_root = Path(getattr(self.server, "workspace"))
+                upload_root = self._workspace()
                 upload_root.mkdir(parents=True, exist_ok=True)
                 destination = upload_root / safe_name
                 destination.write_bytes(self._body())
@@ -250,10 +265,8 @@ class ApexWebHandler(BaseHTTPRequestHandler):
                 return
             if route.path == "/api/decompile":
                 payload = self._payload()
-                apk = Path(str(payload.get("path", ""))).resolve()
-                if not apk.is_file():
-                    raise ApexError(f"APK not found: {apk}")
-                workspace = Path(getattr(self.server, "workspace"))
+                apk = self._client_package_path(str(payload.get("path", "")))
+                workspace = self._workspace()
                 resolved, container = resolve_android_package(apk, workspace)
                 output = workspace / f"{resolved.stem}-decompiled"
                 result = decompile_apk(resolved, output)
@@ -294,6 +307,14 @@ class ApexWebHandler(BaseHTTPRequestHandler):
                 if not prompt:
                     raise ApexError("prompt is required")
                 path = payload.get("path") or None
+                if path is not None:
+                    path = str(
+                        resolve_client_package_path(
+                            str(path),
+                            self._workspace(),
+                            enforce_workspace=self._enforce_workspace_paths(),
+                        )
+                    )
                 provider = str(payload.get("provider") or "heuristic")
                 try:
                     result = run_code_pilot(
@@ -352,6 +373,9 @@ def serve(
     server.dex_class_cap = int(profile.get("dex_class_cap", 0) or 0)  # type: ignore[attr-defined]
     server.dex_lightweight = bool(profile.get("dex_lightweight")) or engine_mode == "on_device"  # type: ignore[attr-defined]
     server.engine_mode = engine_mode  # type: ignore[attr-defined]
+    server.enforce_workspace_paths = bool(  # type: ignore[attr-defined]
+        mobile or host == "0.0.0.0" or engine_mode in ("on_device", "remote_server")
+    )
 
     if standalone:
         print("APEX standalone mode — full engine on this device:")

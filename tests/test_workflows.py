@@ -129,6 +129,7 @@ def test_web_health_and_open_api(tmp_path: Path):
     apk = make_apk(tmp_path / "fixture.apk")
     server = ThreadingHTTPServer(("127.0.0.1", 0), ApexWebHandler)
     server.workspace = str(tmp_path / "web")  # type: ignore[attr-defined]
+    server.enforce_workspace_paths = False  # type: ignore[attr-defined]
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:

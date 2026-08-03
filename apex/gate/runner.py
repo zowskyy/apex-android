@@ -7,13 +7,15 @@ from pathlib import Path
 
 from apex.analysis import ApexError, resolve_android_package, sha256_file
 from apex.gate.models import GateFinding, GateReport, GateStage, GateStatus
+from apex.gate.scanners.secrets import scan_secrets
 from apex.gate.scanners.static import scan_dex, scan_manifest, scan_security
 
 # Slice 7 weights (static analysis scope — not device farm / chaos).
 _SCANNER_WEIGHTS: dict[str, float] = {
-    "manifest": 0.35,
-    "dex": 0.25,
-    "security": 0.40,
+    "manifest": 0.30,
+    "dex": 0.20,
+    "security": 0.35,
+    "secrets": 0.15,
 }
 
 _STAGE_MIN_SCORE: dict[GateStage, float] = {
@@ -60,6 +62,7 @@ def run_hard_gate(
     findings.extend(scan_manifest(resolved, msv))
     findings.extend(scan_dex(resolved))
     findings.extend(scan_security(resolved))
+    findings.extend(scan_secrets(resolved))
 
     score = _weighted_score(findings)
     blocking = [
