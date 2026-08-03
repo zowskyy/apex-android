@@ -46,7 +46,7 @@ if [[ ! -x ./gradlew ]]; then
   gradle wrapper --gradle-version "$GRADLE_VERSION" --no-daemon
 fi
 
-./gradlew assembleRelease --no-daemon
+./gradlew clean assembleRelease --no-daemon
 
 BUILT="$STANDALONE/app/build/outputs/apk/release/app-release.apk"
 if [[ ! -f "$BUILT" ]]; then

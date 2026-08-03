@@ -38,15 +38,19 @@ chaquopy {
         buildPython "python3.10"
         extractPackages "apex", "androguard"
         pip {
-            options("--constraint", "chaquopy-constraints.txt")
-            install "androguard==4.1.4"
-            install "jinja2>=3.1.0"
+            install "cryptography==42.0.8"
             install "lxml>=4.9.0"
             install "asn1crypto>=1.5.0"
             install "networkx>=3.0"
             install "click>=8.0"
             install "colorama>=0.4"
             install "pyyaml>=6.0"
+            install "jinja2>=3.1.0"
+            install "pygments>=2.0"
+            install "apkInspector>=1.1.0"
+            install "dataset>=1.6.0"
+            install "typing_extensions"
+            install "androguard==4.1.4", "--no-deps"
         }
     }
     sourceSets {
