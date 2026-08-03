@@ -137,6 +137,7 @@ Claims like "tests pass", "CI green", or "ready to merge" require evidence from
 5. Never tell the user CI passed if the latest run on HEAD failed or is still `in_progress`.
 6. Never give users APK download links or “install this build” unless `scripts/check_github_ci.sh --apk` passes on that commit.
 7. If CI fails, fix, push again, and re-verify — do not declare the slice done on a failed run.
+8. For mobile/Android: also follow `.cursor/skills/mobile-hard-gate/SKILL.md` (WebView file picker, Chaquopy deps, device smoke, Releases gate).
 
 ### Slice exit (Salami cycle)
 

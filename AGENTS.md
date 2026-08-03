@@ -10,8 +10,9 @@ that would defer core capability.
 ### Global skill (every project)
 
 Follow `.cursor/skills/finished-product-delivery/SKILL.md` (install per
-`.cursor/skills/README.md`). It requires **GitHub CI validation** before any
-slice is declared done — not only local tests.
+`.cursor/skills/README.md`). For mobile APK / Android standalone, also follow
+`.cursor/skills/mobile-hard-gate/SKILL.md`. It requires **GitHub CI validation**
+before any slice is declared done — not only local tests.
 
 ## Architecture (this repo)
 

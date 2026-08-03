@@ -10,12 +10,14 @@ Claude Code desktop, Claude Code mobile).
 ```bash
 mkdir -p ~/.cursor/skills
 cp -r .cursor/skills/finished-product-delivery ~/.cursor/skills/
+cp -r .cursor/skills/mobile-hard-gate ~/.cursor/skills/
 ```
 
 Or symlink:
 
 ```bash
 ln -sf "$(pwd)/.cursor/skills/finished-product-delivery" ~/.cursor/skills/
+ln -sf "$(pwd)/.cursor/skills/mobile-hard-gate" ~/.cursor/skills/
 ```
 
 ### Claude Code
@@ -30,9 +32,17 @@ Point agents at the repo copy:
 
 ```text
 .cursor/skills/finished-product-delivery/SKILL.md
+.cursor/skills/mobile-hard-gate/SKILL.md   # Android/mobile hard gate before APK handoff
 ```
 
 Project-specific rules live in `AGENTS.md` and `docs/PRINCIPLES.md`.
+
+## Skills
+
+| Skill | When to use |
+|-------|-------------|
+| `finished-product-delivery` | Every project — scope, wiring, CI, marketplace |
+| `mobile-hard-gate` | Mobile APK, WebView shells, Chaquopy, store/Releases |
 
 ## What it covers
 
@@ -42,6 +52,7 @@ Project-specific rules live in `AGENTS.md` and `docs/PRINCIPLES.md`.
 | End-to-end wiring | Connect every layer before merge |
 | Marketplace-ready | Public description matches reality |
 | GitHub CI proof | Green Actions run on HEAD before claiming done |
+| Mobile hard gate | APK/WebView/device smoke before mobile handoff (`mobile-hard-gate`) |
 
 ## One-sentence standard
 
