@@ -91,9 +91,19 @@ case "$PLATFORM" in
   ;;
   windows)
     if command -v powershell.exe >/dev/null 2>&1; then
-      powershell.exe -Command "Compress-Archive -Path '$STAGE' -DestinationPath '$ARCHIVE_DIR/${STAGE_NAME}.zip' -Force"
+      STAGE_WIN="$(cd "$STAGE" && pwd -W)"
+      ARCHIVE_WIN="$(cd "$ARCHIVE_DIR" && pwd -W)\\${STAGE_NAME}.zip"
+      powershell.exe -NoProfile -Command "Compress-Archive -LiteralPath '$STAGE_WIN' -DestinationPath '$ARCHIVE_WIN' -Force"
+    elif command -v cygpath >/dev/null 2>&1; then
+      STAGE_WIN="$(cygpath -w "$STAGE")"
+      ARCHIVE_WIN="$(cygpath -w "$ARCHIVE_DIR/${STAGE_NAME}.zip")"
+      powershell -NoProfile -Command "Compress-Archive -LiteralPath '$STAGE_WIN' -DestinationPath '$ARCHIVE_WIN' -Force"
     else
-      powershell -Command "Compress-Archive -Path '$STAGE' -DestinationPath '$ARCHIVE_DIR/${STAGE_NAME}.zip' -Force"
+      python - "$STAGE" "$ARCHIVE_DIR/${STAGE_NAME}.zip" <<'PY'
+import pathlib, shutil, sys
+archive = pathlib.Path(sys.argv[2])
+shutil.make_archive(str(archive.with_suffix("")), "zip", sys.argv[1])
+PY
     fi
     ls -la "$ARCHIVE_DIR/${STAGE_NAME}.zip"
   ;;
