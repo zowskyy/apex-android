@@ -14,6 +14,7 @@ Start here if you are new to the repo.
 | [SECURITY.md](SECURITY.md) | Security | GPG signing + key rotation |
 | [REPRODUCIBILITY.md](REPRODUCIBILITY.md) | Release eng | Golden baseline + SBOM |
 | [AUDIT_RESPONSE_0.4.11.md](AUDIT_RESPONSE_0.4.11.md) | Maintainers | External audit findings + repo response |
+| [AUDIT_REVIEW_860ed81.md](AUDIT_REVIEW_860ed81.md) | Maintainers | system-architect-audit review of audit commit |
 | [COMPLETION_ROADMAP.md](COMPLETION_ROADMAP.md) | PM / eng | Capability matrix |
 | [SLICE_TRUTH.md](SLICE_TRUTH.md) | Eng | Implementation status table |
 | [CI_RELEASE_BLUEPRINT.md](CI_RELEASE_BLUEPRINT.md) | Release eng | CI DAG + artifacts |
