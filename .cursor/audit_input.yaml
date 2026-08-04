@@ -1,0 +1,57 @@
+# APEX ARC audit input manifest — test harness template
+# Adapted from PCB audit_input.yaml (schematic/layout/BOM → code artifacts).
+# See docs/ARC_CODE_AUDIT_DESIGN.md
+
+subject: "apex-android"
+version: "0.4.11"
+target_standard: "ARC zero-findings"
+
+# Source trees (PCB: schematic)
+sources:
+  - "apex/"
+  - "core/"
+  - "scripts/"
+  - "wrappers/"
+  - "tests/"
+
+# CI / release topology (PCB: layout)
+workflows:
+  - ".github/workflows/ci.yml"
+  - ".github/workflows/release.yml"
+  - ".github/workflows/hard-gate.yml"
+  - ".github/workflows/supply-chain.yml"
+  - ".github/workflows/monitor-gates.yml"
+
+# Dependency integrity (PCB: bom)
+manifests:
+  - "pyproject.toml"
+  - "requirements.txt"
+  - "requirements.lock"
+  - "requirements-dev.lock"
+  - "Cargo.toml"
+  - "Cargo.lock"
+  - "wrappers/android/standalone/app/build.gradle"
+
+# Native / mobile layers (PCB: stackup)
+native:
+  - "core/zip_reader/"
+  - "core/dex_reader/"
+  - "core/dex_parser/"
+  - "wrappers/docker/Dockerfile"
+  - "wrappers/android/"
+
+# High-stakes flows (PCB: critical_nets)
+critical_paths:
+  - "apex.cli:main"
+  - "apex.web:serve"
+  - "apex.gate:run_hard_gate"
+  - "release.yml:publish"
+  - "build.sh"
+  - "wrappers/android/build_standalone.sh"
+
+# Harness I/O
+context_dir: "/tmp/apex_arc_context"
+findings_path: "/tmp/findings.json"
+previous_findings_path: "/tmp/findings_previous.json"
+history_path: "AUDIT_HISTORY.json"
+max_audit_iterations: 3

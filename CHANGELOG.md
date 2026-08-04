@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Community health docs: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, root
   `SECURITY.md`
 - This changelog
+- ARC code-audit design (`docs/ARC_CODE_AUDIT_DESIGN.md`),
+  `.cursor/FEEDBACK_PROTOCOL.md`, `.cursor/audit_input.yaml`, and Iterative
+  Zero-Findings rule in `universal-arc-engine` skill
 
 ### Changed
 
