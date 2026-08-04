@@ -1,29 +1,27 @@
 # PROJECT_STATE.md — APEX
 
-## Current Phase: Integrated application complete (v0.2.0)
+## Current Phase: Integrated application complete (v0.4.11)
 
-APEX now provides the complete user-facing workflow through both the CLI and
-the loopback web application:
+APEX ships the complete user-facing workflow through both the CLI and
+the loopback web application, plus the v0.4.11 hard-gate / release factory.
 
-- Fast APK inspection with binary manifest and resource-table metadata
-- Full DEX class/method/string/call-reference indexing
-- DEX → Java decompilation with readable Dalvik output
-- Safe decode and lossless raw rebuild, plus optional apktool resource rebuild
-- Optional APK signing through Android `apksigner`
-- APK structure/DEX/signature verification and zero-edit round-trip validation
-- Static security scanning, semantic APK diff, framework diagnostics, and
-  ProGuard/R8 class mapping support
-- JSON and HTML reports, SQLite/PostgreSQL report storage, and an interactive
-  local web interface
-- Pip-installable package, CLI entry point, MIT license, and end-to-end tests
+### ARC clean patches (branch `arc-clean-patches`)
 
-Mature Android-format handling is provided by Androguard 4.1.4 while the
-existing native Rust ZIP and DEX implementations remain tested components.
-Compiled XML/resource edits intentionally use apktool when available; the
-built-in raw backend never misrepresents extracted binary data as recompilable
-source.
+Tasks 1–11 applied for zero-findings hygiene:
 
-## Completed Slices
+1. Python `requirements.lock` (runtime pins)
+2. Python `requirements-dev.lock` + `scripts/generate_lockfiles.sh`
+3. Dockerfile base image pinned by digest
+4. Dockerfile installs from lockfile + `maturin --locked`
+5. Dockerfile non-root runtime user
+6. `build.sh --verbose`
+7. Android standalone `--verbose` passthrough
+8. CLI global `-v` / `--verbose`
+9. Rust MSRV `rust-version = "1.74"`
+10. Community docs: CONTRIBUTING, CODE_OF_CONDUCT, root SECURITY
+11. CHANGELOG + docs/README/REPRODUCIBILITY links
+
+## Completed Slices (legacy notes below)
 - 0.3 — Core engine + 10-test suite, all passing on Windows (commit 9703652)
 - 1.1 — Rust ZIP reader (`core/zip_reader`, PyO3 module `apex_zip_reader`):
   path-traversal + absolute-path + NUL-byte + oversized-name sanitization,

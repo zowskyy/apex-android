@@ -3,6 +3,7 @@ name = "apex_zip_reader"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+rust-version.workspace = true
 
 [lib]
 name = "apex_zip_reader"

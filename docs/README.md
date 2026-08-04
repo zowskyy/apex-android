@@ -12,7 +12,11 @@ Start here if you are new to the repo.
 | [RUNBOOKS.md](RUNBOOKS.md) | On-call | CVE / rollback / version drift |
 | [COMPLIANCE.md](COMPLIANCE.md) | Governance | Audit trail + KPIs |
 | [SECURITY.md](SECURITY.md) | Security | GPG signing + key rotation |
-| [REPRODUCIBILITY.md](REPRODUCIBILITY.md) | Release eng | Golden baseline + SBOM |
+| [../SECURITY.md](../SECURITY.md) | Security | Vulnerability reporting (GitHub community file) |
+| [REPRODUCIBILITY.md](REPRODUCIBILITY.md) | Release eng | Lockfiles, MSRV, Docker digest, SBOM |
+| [../CHANGELOG.md](../CHANGELOG.md) | Everyone | Keep a Changelog release notes |
+| [../CONTRIBUTING.md](../CONTRIBUTING.md) | Contributors | Dev loop + PR expectations |
+| [../CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) | Everyone | Contributor Covenant 2.1 |
 | [AUDIT_RESPONSE_0.4.11.md](AUDIT_RESPONSE_0.4.11.md) | Maintainers | External audit findings + repo response |
 | [AUDIT_REVIEW_860ed81.md](AUDIT_REVIEW_860ed81.md) | Maintainers | system-architect-audit review of audit commit |
 | [ARC_REVIEW_APEX_0.4.11.md](ARC_REVIEW_APEX_0.4.11.md) | Maintainers | Universal-ARC-Engine 8-phase review |

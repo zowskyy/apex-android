@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 # Build the full on-device APEX APK (embedded Python engine via Chaquopy).
+#
+# Usage:
+#   bash wrappers/android/build_standalone.sh
+#   bash wrappers/android/build_standalone.sh --verbose
+#
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -7,6 +12,22 @@ ROOT="$(cd "$HERE/../../" && pwd)"
 STANDALONE="$HERE/standalone"
 OUT_APK="$HERE/dist/apex-mobile.apk"
 GRADLE="${APEX_GRADLE:-gradle}"
+VERBOSE="${APEX_BUILD_VERBOSE:-0}"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -v|--verbose) VERBOSE=1 ;;
+    -h|--help)
+      sed -n '2,7p' "$0" | sed 's/^# \{0,1\}//'
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      exit 1
+      ;;
+  esac
+  shift
+done
 
 if ! command -v "$GRADLE" >/dev/null 2>&1; then
   echo "Gradle not found. Install Gradle 8.x or set APEX_GRADLE." >&2
@@ -43,7 +64,11 @@ if [[ ! -x ./gradlew ]]; then
   gradle wrapper --gradle-version "$GRADLE_VERSION" --no-daemon
 fi
 
-./gradlew clean assembleRelease --no-daemon
+GRADLE_ARGS=(clean assembleRelease --no-daemon)
+if [[ "$VERBOSE" -eq 1 ]]; then
+  GRADLE_ARGS+=(--info)
+fi
+./gradlew "${GRADLE_ARGS[@]}"
 
 echo "==> Chaquopy import smoke test (same env as on-device engine)"
 chmod +x "$ROOT/scripts/smoke_android_engine_imports.sh"

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import sys
 from pathlib import Path
 from typing import Any
@@ -29,6 +30,7 @@ from .workflows import (
 )
 
 VERSION = __version__
+LOG = logging.getLogger("apex")
 
 
 def _print(data: Any, output: str | None = None) -> None:
@@ -40,12 +42,35 @@ def _print(data: Any, output: str | None = None) -> None:
         print(text)
 
 
+def _configure_logging(verbose: int) -> None:
+    """Configure root logging from ``-v`` / ``--verbose`` count."""
+    if verbose <= 0:
+        level = logging.WARNING
+    elif verbose == 1:
+        level = logging.INFO
+    else:
+        level = logging.DEBUG
+    logging.basicConfig(
+        level=level,
+        format="%(levelname)s %(name)s: %(message)s",
+        stream=sys.stderr,
+        force=True,
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="apex",
         description="APEX — secure Android package inspection, decompilation, and rebuilding",
     )
     parser.add_argument("--version", action="version", version=f"APEX {VERSION}")
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        default=0,
+        help="increase logging verbosity (-v INFO, -vv DEBUG)",
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     inspect_cmd = sub.add_parser("inspect", help="fast APK metadata inspection")
@@ -206,8 +231,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    _configure_logging(getattr(args, "verbose", 0))
+    LOG.debug("apex %s command=%s", VERSION, args.command)
     try:
         if args.command == "inspect":
+            LOG.info("inspect %s", args.apk)
             _print(inspect_apk(Path(args.apk), include_files=args.files), args.output)
         elif args.command == "analyze":
             store = None

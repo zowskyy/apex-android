@@ -6,3 +6,5 @@ members = ["core/zip_reader", "core/dex_parser", "core/dex_reader"]
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
+# Minimum Supported Rust Version (MSRV). Bump only with intentional CI coverage.
+rust-version = "1.74"
