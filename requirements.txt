@@ -1,2 +1,5 @@
 jinja2>=3.1.0
 androguard>=4.1.4
+# For a fully pinned install use requirements.lock (runtime) or
+# requirements-dev.lock (runtime + pytest/ruff/mcp).
+# Regenerate: bash scripts/generate_lockfiles.sh

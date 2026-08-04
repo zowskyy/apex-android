@@ -5,10 +5,11 @@
 #   ./build.sh                 # dev install + native extensions + tests
 #   ./build.sh --release       # same, optimized Rust builds
 #   ./build.sh --android       # also build Android client APK (needs SDK)
-  ./build.sh --android-standalone  # full on-device phone APK (Gradle + Chaquopy)
+#   ./build.sh --android-standalone  # full on-device phone APK (Gradle + Chaquopy)
 #   ./build.sh --macos-apps    # also build macOS .app bundles (macOS only)
 #   ./build.sh --docker        # also build Docker image
 #   ./build.sh --skip-tests    # skip cargo test, ruff, and pytest
+#   ./build.sh --verbose       # verbose pip / cargo / pytest output
 #   ./build.sh --help
 #
 set -euo pipefail
@@ -26,9 +27,16 @@ DO_ANDROID_STANDALONE=0
 DO_MACOS_APPS=0
 DO_DOCKER=0
 SKIP_TESTS=0
+VERBOSE=0
 
 usage() {
-  sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+vlog() {
+  if [[ "$VERBOSE" -eq 1 ]]; then
+    echo "[verbose] $*"
+  fi
 }
 
 while [[ $# -gt 0 ]]; do
@@ -39,11 +47,14 @@ while [[ $# -gt 0 ]]; do
     --macos-apps) DO_MACOS_APPS=1 ;;
     --docker) DO_DOCKER=1 ;;
     --skip-tests) SKIP_TESTS=1 ;;
+    -v|--verbose) VERBOSE=1 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 1 ;;
   esac
   shift
 done
+
+export APEX_BUILD_VERBOSE="$VERBOSE"
 
 step() { echo ""; echo "==> $*"; }
 
@@ -63,40 +74,53 @@ ensure_android_sdk() {
   fi
 }
 
+PIP_FLAGS=(-q)
+PYTEST_FLAGS=(-q)
+CARGO_FLAGS=()
+MATURIN_FLAGS=()
+if [[ "$VERBOSE" -eq 1 ]]; then
+  PIP_FLAGS=()
+  PYTEST_FLAGS=(-v)
+  CARGO_FLAGS=(--verbose)
+  MATURIN_FLAGS=(--verbose)
+fi
+
 step "Python virtual environment"
 if [[ ! -x "$PY" ]]; then
   python3 -m venv "$VENV"
 fi
-"$PIP" install -q --upgrade pip wheel
-"$PIP" install -q -e ".[dev,mcp]"
+"$PIP" install "${PIP_FLAGS[@]}" --upgrade pip wheel
+vlog "pip install -e '.[dev,mcp]'"
+"$PIP" install "${PIP_FLAGS[@]}" -e ".[dev,mcp]"
 
 step "Rust toolchain check"
 if ! command -v rustc >/dev/null 2>&1; then
   echo "Rust not found. Install: https://rustup.rs" >&2
   exit 1
 fi
+vlog "rustc $(rustc --version)"
 
 if [[ ! -x "$MATURIN" ]]; then
-  "$PIP" install -q maturin
+  "$PIP" install "${PIP_FLAGS[@]}" maturin
 fi
 
 step "Native extensions (apex_zip_reader, apex_dex_reader)"
-MATURIN_ARGS=()
+MATURIN_ARGS=("${MATURIN_FLAGS[@]}")
 if [[ "$RUST_PROFILE" == "release" ]]; then
   MATURIN_ARGS+=(--release)
 fi
-"$MATURIN" develop "${MATURIN_ARGS[@]}" -m core/zip_reader/Cargo.toml
-"$MATURIN" develop "${MATURIN_ARGS[@]}" -m core/dex_reader/Cargo.toml
+"$MATURIN" develop "${MATURIN_ARGS[@]}" --locked -m core/zip_reader/Cargo.toml
+"$MATURIN" develop "${MATURIN_ARGS[@]}" --locked -m core/dex_reader/Cargo.toml
 
 if [[ "$SKIP_TESTS" -eq 0 ]]; then
   step "Rust workspace tests"
-  cargo test --workspace
+  cargo test --workspace --locked "${CARGO_FLAGS[@]}"
 
   step "Python lint (ruff)"
   "$VENV/bin/ruff" check apex tests
 
   step "Python tests (pytest)"
-  "$PY" -m pytest -q
+  "$PY" -m pytest "${PYTEST_FLAGS[@]}"
 else
   echo "Skipping cargo test, ruff, and pytest (--skip-tests)"
 fi
@@ -128,7 +152,11 @@ if [[ "$DO_ANDROID_STANDALONE" -eq 1 ]]; then
   step "Android standalone APK (on-device engine)"
   ensure_android_sdk
   chmod +x wrappers/android/build_standalone.sh
-  bash wrappers/android/build_standalone.sh
+  if [[ "$VERBOSE" -eq 1 ]]; then
+    bash wrappers/android/build_standalone.sh --verbose
+  else
+    bash wrappers/android/build_standalone.sh
+  fi
   if [[ ! -f "$MOBILE_APK" ]]; then
     echo "Standalone build finished but APK missing: $MOBILE_APK" >&2
     exit 1
@@ -139,7 +167,11 @@ fi
 if [[ "$DO_DOCKER" -eq 1 ]]; then
   step "Docker image"
   if command -v docker >/dev/null 2>&1; then
-    docker build -f wrappers/docker/Dockerfile -t apex-android:local "$ROOT"
+    DOCKER_FLAGS=()
+    if [[ "$VERBOSE" -eq 1 ]]; then
+      DOCKER_FLAGS=(--progress=plain)
+    fi
+    docker build "${DOCKER_FLAGS[@]}" -f wrappers/docker/Dockerfile -t apex-android:local "$ROOT"
   else
     echo "Docker not found — skip image build" >&2
   fi

@@ -116,9 +116,14 @@ backend is required when source XML or resource definitions are modified.
 ## Development
 
 ```bash
+./build.sh                 # install + native + tests
+./build.sh --verbose       # noisy diagnostics
 pytest -q
-cargo test --workspace
+cargo test --workspace --locked
 ```
+
+Pinned installs: `pip install -r requirements-dev.lock`. Rust MSRV is **1.74**
+(see `Cargo.toml`). Changelog: [CHANGELOG.md](CHANGELOG.md).
 
 The genuine DEX fixture under `core/dex_parser/tests/fixtures/` exercises class,
 method, instruction, CFG, Java-decompilation, and cross-reference paths.
@@ -129,6 +134,10 @@ fixtures for extraction and traversal regression tests.
 
 APEX Community edition is MIT licensed. Third-party parsers and tools retain
 their own licenses; see `NOTICE`. Androguard is used under Apache License 2.0.
+
+**Community:** [CONTRIBUTING.md](CONTRIBUTING.md) ·
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) · [SECURITY.md](SECURITY.md) ·
+[CHANGELOG.md](CHANGELOG.md)
 
 **Acceptable use:** APEX is intended for science, education, research, and
 constructive engineering. See [docs/ACCEPTABLE_USE.md](docs/ACCEPTABLE_USE.md).
