@@ -20,6 +20,7 @@ Start here if you are new to the repo.
 | [AUDIT_RESPONSE_0.4.11.md](AUDIT_RESPONSE_0.4.11.md) | Maintainers | External audit findings + repo response |
 | [AUDIT_REVIEW_860ed81.md](AUDIT_REVIEW_860ed81.md) | Maintainers | system-architect-audit review of audit commit |
 | [ARC_REVIEW_APEX_0.4.11.md](ARC_REVIEW_APEX_0.4.11.md) | Maintainers | Universal-ARC-Engine 8-phase review |
+| [ARC_CODE_AUDIT_DESIGN.md](ARC_CODE_AUDIT_DESIGN.md) | Maintainers | PCB→code ARC design: Zero-Findings, schemas, harness |
 | [COMPLETION_ROADMAP.md](COMPLETION_ROADMAP.md) | PM / eng | Capability matrix |
 | [SLICE_TRUTH.md](SLICE_TRUTH.md) | Eng | Implementation status table |
 | [CI_RELEASE_BLUEPRINT.md](CI_RELEASE_BLUEPRINT.md) | Release eng | CI DAG + artifacts |
