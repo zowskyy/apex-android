@@ -1,0 +1,47 @@
+{
+  "name": "cursor-oss",
+  "displayName": "Cursor OSS - Free Coding Agent",
+  "description": "Offline, subscription-free AI coding agent with ARC self-review cycle. Built for every community.",
+  "version": "1.0.0",
+  "engines": { "vscode": "^1.80.0" },
+  "categories": ["Programming Languages", "Machine Learning", "Other"],
+  "activationEvents": ["onCommand:cursorOss.arcCycle"],
+  "main": "../ide-bridge.js",
+  "contributes": {
+    "commands": [
+      { "command": "cursorOss.arcCycle", "title": "ARC Cycle: Full Code Review & Generate" },
+      { "command": "cursorOss.quickComplete", "title": "ARC Quick Complete" },
+      { "command": "cursorOss.showReview", "title": "Show ARC Review Panel" },
+      { "command": "cursorOss.toggleOffline", "title": "Toggle Offline Mode" }
+    ],
+    "keybindings": [
+      { "command": "cursorOss.arcCycle", "key": "ctrl+shift+a", "mac": "cmd+shift+a" },
+      { "command": "cursorOss.quickComplete", "key": "ctrl+shift+space", "mac": "cmd+shift+space" }
+    ],
+    "configuration": {
+      "title": "Cursor OSS",
+      "properties": {
+        "cursorOss.modelPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to GGUF model file"
+        },
+        "cursorOss.maxReviewLoops": {
+          "type": "number",
+          "default": 3,
+          "description": "Maximum ARC refinement iterations"
+        },
+        "cursorOss.qualityThreshold": {
+          "type": "number",
+          "default": 0.85,
+          "description": "Minimum review score to accept (0.0-1.0)"
+        },
+        "cursorOss.offlineMode": {
+          "type": "boolean",
+          "default": true,
+          "description": "Never make network requests"
+        }
+      }
+    }
+  }
+}
