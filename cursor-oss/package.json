@@ -1,0 +1,22 @@
+{
+  "name": "cursor-oss",
+  "version": "1.0.0",
+  "description": "Free, offline coding agent with ARC self-review cycle",
+  "main": "arc-agent.js",
+  "scripts": {
+    "start": "node arc-agent.js",
+    "install:model": "bash installer.sh",
+    "test": "node test-agent.js",
+    "benchmark": "node test-agent.js --benchmark"
+  },
+  "dependencies": {
+    "node-llama-cpp": "^3.0.0",
+    "chokidar": "^3.5.3",
+    "diff": "^5.1.0",
+    "tree-sitter": "^0.20.0",
+    "tree-sitter-javascript": "^0.20.0",
+    "tree-sitter-python": "^0.20.0",
+    "minisearch": "^6.0.0",
+    "fast-levenshtein": "^3.0.0"
+  }
+}

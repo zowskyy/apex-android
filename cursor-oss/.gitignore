@@ -1,0 +1,5 @@
+node_modules/
+models/*.gguf
+package-lock.json
+.DS_Store
+*.log
