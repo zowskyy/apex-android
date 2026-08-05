@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+  <title>Cursor OSS — Free Coding Agent</title>
+  <style>
+    :root {
+      --bg: #1a1a2e;
+      --surface: #16213e;
+      --primary: #0f3460;
+      --accent: #e94560;
+      --text: #eee;
+      --text-secondary: #a0a0b0;
+      --success: #4ecca3;
+      --warning: #f0a500;
+      --border: #2a2a4a;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .header {
+      background: var(--surface);
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+
+    .header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      background: linear-gradient(135deg, var(--accent), #ff6b6b);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .header .status {
+      margin-left: auto;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); }
+    .dot.offline { background: var(--accent); }
+
+    .chat {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .message {
+      max-width: 85%;
+      padding: 12px 16px;
+      border-radius: 16px;
+      line-height: 1.5;
+      font-size: 14px;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .message.user {
+      align-self: flex-end;
+      background: var(--primary);
+      border-bottom-right-radius: 4px;
+    }
+
+    .message.agent {
+      align-self: flex-start;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 4px;
+    }
+
+    .message.system {
+      align-self: center;
+      background: transparent;
+      color: var(--text-secondary);
+      font-size: 12px;
+      padding: 4px 8px;
+    }
+
+    .stage-indicator {
+      display: flex;
+      gap: 8px;
+      padding: 8px 16px;
+      overflow-x: auto;
+      flex-shrink: 0;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+    }
+
+    .stage-pill {
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 11px;
+      white-space: nowrap;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      transition: all 0.2s;
+    }
+
+    .stage-pill.active { background: var(--accent); border-color: var(--accent); color: white; }
+    .stage-pill.done { background: var(--success); border-color: var(--success); color: var(--bg); }
+
+    .input-area {
+      padding: 12px 16px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .input-area textarea {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 14px;
+      color: var(--text);
+      font-size: 14px;
+      resize: none;
+      min-height: 44px;
+      max-height: 120px;
+      font-family: inherit;
+    }
+
+    .input-area textarea:focus { outline: none; border-color: var(--accent); }
+
+    .input-area button {
+      background: var(--accent);
+      border: none;
+      border-radius: 12px;
+      padding: 10px 20px;
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .input-area button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    pre {
+      background: var(--bg);
+      padding: 12px;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-size: 12px;
+      margin: 8px 0;
+      border: 1px solid var(--border);
+    }
+
+    code { font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+
+    .idea-button {
+      background: transparent;
+      border: 1px dashed var(--accent);
+      color: var(--accent);
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 13px;
+      cursor: pointer;
+      margin: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>⚡ Cursor OSS</h1>
+    <span style="font-size:11px;color:var(--text-secondary)">Free · Offline · No Subscription</span>
+    <div class="status">
+      <div class="dot" id="statusDot"></div>
+      <span id="statusText">Ready</span>
+    </div>
+  </div>
+
+  <div class="stage-indicator" id="stages">
+    <div class="stage-pill" data-stage="analysis">🔍 Analysis</div>
+    <div class="stage-pill" data-stage="plan">📋 Plan</div>
+    <div class="stage-pill" data-stage="code">💻 Code</div>
+    <div class="stage-pill" data-stage="review">✅ Review</div>
+  </div>
+
+  <div class="chat" id="chat">
+    <div class="message agent">
+      <strong>Welcome!</strong> 👋<br><br>
+      I'm a free, offline coding agent. I can:<br>
+      • Write code from scratch<br>
+      • Fix bugs and add features<br>
+      • Turn your idea into a working app<br><br>
+      <em>I run completely on this device. No internet needed.</em><br><br>
+      <button class="idea-button" onclick="startIdea()">💡 I have an idea...</button>
+      <button class="idea-button" onclick="document.getElementById('userInput').focus()">✏️ Help me code</button>
+    </div>
+  </div>
+
+  <div class="input-area">
+    <textarea
+      id="userInput"
+      placeholder="Describe what you want to build or fix..."
+      rows="1"
+      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}"
+    ></textarea>
+    <button id="sendBtn" onclick="sendMessage()">Send</button>
+  </div>
+
+  <script>
+    const API = window.location.origin.includes('8899')
+      ? window.location.origin
+      : 'http://localhost:8899';
+    let isProcessing = false;
+
+    function addMessage(text, role = 'agent') {
+      const chat = document.getElementById('chat');
+      const div = document.createElement('div');
+      div.className = `message ${role}`;
+      div.innerHTML = text.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+      return div;
+    }
+
+    function setStage(stage) {
+      const stages = ['analysis', 'plan', 'code', 'review'];
+      const idx = stages.indexOf(stage);
+      document.querySelectorAll('.stage-pill').forEach(p => {
+        p.classList.remove('active', 'done');
+        const pIdx = stages.indexOf(p.dataset.stage);
+        if (p.dataset.stage === stage) p.classList.add('active');
+        if (pIdx >= 0 && pIdx < idx) p.classList.add('done');
+      });
+    }
+
+    function setStatus(text, online = true) {
+      document.getElementById('statusText').textContent = text;
+      document.getElementById('statusDot').className = 'dot' + (online ? '' : ' offline');
+    }
+
+    async function callAgent(systemPrompt, userPrompt) {
+      const response = await fetch(`${API}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          temperature: 0.1,
+          max_tokens: 2048
+        })
+      });
+      if (!response.ok) throw new Error(`Server error: ${response.status}`);
+      const data = await response.json();
+      return data.choices[0].message.content;
+    }
+
+    function parseJSON(text) {
+      const start = text.indexOf('{');
+      const end = text.lastIndexOf('}');
+      if (start === -1) return null;
+      try { return JSON.parse(text.substring(start, end + 1)); }
+      catch { return null; }
+    }
+
+    async function sendMessage() {
+      if (isProcessing) return;
+      const input = document.getElementById('userInput');
+      const text = input.value.trim();
+      if (!text) return;
+
+      input.value = '';
+      isProcessing = true;
+      document.getElementById('sendBtn').disabled = true;
+      addMessage(text, 'user');
+
+      const thinkingMsg = addMessage('🤔 Starting ARC cycle...', 'system');
+
+      try {
+        setStage('analysis');
+        thinkingMsg.innerHTML = '🔍 Analysis: Understanding what you need...';
+        const analysisRaw = await callAgent(
+          'You are a code analyzer. Output ONLY valid JSON with requestType, language, complexity, files, summary.',
+          `Analyze this request (JSON only):\n\n${text}`
+        );
+
+        setStage('plan');
+        thinkingMsg.innerHTML = '📋 Planning: Creating step-by-step plan...';
+        const planRaw = await callAgent(
+          'You are a software architect. Output ONLY valid JSON with steps array.',
+          `Create plan (JSON only):\n\nRequest: ${text}\nAnalysis: ${analysisRaw}`
+        );
+
+        setStage('code');
+        thinkingMsg.innerHTML = '💻 Generating code...';
+        const codeRaw = await callAgent(
+          'You are a programmer. Output ONLY valid JSON with files array (path, content, description).',
+          `Write code (JSON only):\n\nRequest: ${text}\nPlan: ${planRaw}`
+        );
+
+        setStage('review');
+        thinkingMsg.innerHTML = '✅ Reviewing and refining...';
+        const reviewRaw = await callAgent(
+          'You are a code reviewer. Output ONLY valid JSON with score, passed, issues.',
+          `Review (JSON only):\n\nRequest: ${text}\nCode: ${codeRaw}`
+        );
+
+        thinkingMsg.remove();
+        setStage('review');
+        document.querySelector('[data-stage="review"]').classList.add('done');
+
+        const codeData = parseJSON(codeRaw);
+        if (codeData?.files) {
+          let output = '<strong>📁 Generated Files</strong><br><br>';
+          for (const file of codeData.files) {
+            output += `<strong>${file.path}</strong> — ${file.description || ''}<br>`;
+            output += '```\n' + file.content + '\n```<br><br>';
+          }
+          if (codeData.explanation) output += `<strong>📝 How to Use</strong><br>${codeData.explanation}`;
+          addMessage(output);
+        } else {
+          addMessage(codeRaw);
+        }
+
+        const reviewData = parseJSON(reviewRaw);
+        if (reviewData?.score !== undefined) {
+          addMessage(`Review score: <strong>${reviewData.score}</strong> — ${reviewData.summary || ''}`, 'system');
+        }
+
+        setStatus('Ready');
+      } catch (err) {
+        thinkingMsg.remove();
+        addMessage(`❌ ${err.message}. Start server: <code>node server/inference.js</code>`, 'system');
+        setStatus('Server not running', false);
+      }
+
+      isProcessing = false;
+      document.getElementById('sendBtn').disabled = false;
+      document.getElementById('userInput').focus();
+    }
+
+    function startIdea() {
+      const input = document.getElementById('userInput');
+      input.value = 'I have an idea: ';
+      input.focus();
+    }
+
+    fetch(`${API}/health`)
+      .then(r => r.json())
+      .then(data => setStatus(`Model: ${data.model}`, true))
+      .catch(() => setStatus('Server not running', false));
+  </script>
+</body>
+</html>

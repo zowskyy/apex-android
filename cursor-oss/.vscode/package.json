@@ -2,11 +2,11 @@
   "name": "cursor-oss",
   "displayName": "Cursor OSS - Free Coding Agent",
   "description": "Offline, subscription-free AI coding agent with ARC self-review cycle. Built for every community.",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "engines": { "vscode": "^1.80.0" },
   "categories": ["Programming Languages", "Machine Learning", "Other"],
   "activationEvents": ["onCommand:cursorOss.arcCycle"],
-  "main": "../ide-bridge.js",
+  "main": "../ui/vscode-bridge.js",
   "contributes": {
     "commands": [
       { "command": "cursorOss.arcCycle", "title": "ARC Cycle: Full Code Review & Generate" },
@@ -21,6 +21,11 @@
     "configuration": {
       "title": "Cursor OSS",
       "properties": {
+        "cursorOss.inferenceUrl": {
+          "type": "string",
+          "default": "http://localhost:8899",
+          "description": "URL of the local inference server"
+        },
         "cursorOss.modelPath": {
           "type": "string",
           "default": "",
