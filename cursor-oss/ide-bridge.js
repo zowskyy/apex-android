@@ -393,4 +393,19 @@ class IDEBridge {
   }
 }
 
-module.exports = { IDEBridge };
+let bridgeInstance = null;
+
+async function activate(context) {
+  bridgeInstance = new IDEBridge();
+  await bridgeInstance.activate(context);
+  context.subscriptions.push({ dispose: () => bridgeInstance?.deactivate() });
+}
+
+async function deactivate() {
+  if (bridgeInstance) {
+    await bridgeInstance.deactivate();
+    bridgeInstance = null;
+  }
+}
+
+module.exports = { activate, deactivate, IDEBridge };
