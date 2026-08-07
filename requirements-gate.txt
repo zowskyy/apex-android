@@ -1,0 +1,6 @@
+# Cursor Gate reviewer dependencies (CI + local gate scripts).
+# APEX runtime deps remain in requirements.txt / pyproject.toml.
+litellm>=1.40.0
+requests>=2.31.0
+bandit>=1.7.0
+radon>=6.0.0

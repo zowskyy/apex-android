@@ -61,3 +61,20 @@ cargo test --workspace
 
 **Do not** claim "CI passes", "ready to ship", or "validated" without a green
 GitHub Actions run on the current commit.
+
+## Cursor Gate (code review)
+
+This repo also ships [Cursor Gate](https://github.com/zowskyy/cursor-gate) scripts
+for agent-driven code review. Gate reviewer deps live in `requirements-gate.txt`.
+
+When you produce or modify code:
+
+1. Run `python3 ~/.cursor/cursor_gate_fastest.py --file <path> --region us-west-2`
+2. Run `python3 ~/.cursor/cursor_gate.py --file <path> --iterations 3`
+3. Fix all failures and re-run until **both** return `"status": "PASS"`
+4. Only then send the code to the user
+
+Bootstrap locally: `bash scripts/install-agent-environment.sh` (from repo root).
+PR CI: workflow `Gate Check` runs `scripts/gate-file.sh` on `samples/hello_passing.py`.
+
+Delegation policy: [`.cursor/rules/quarterback-worker.mdc`](.cursor/rules/quarterback-worker.mdc).
