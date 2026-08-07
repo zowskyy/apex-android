@@ -79,6 +79,68 @@ fn read_entries(py: Python<'_>, apk_path: &str) -> PyResult<Vec<Py<PyAny>>> {
     Ok(results)
 }
 
+/// Columnar batch listing — one dict of parallel lists instead of N per-entry dicts.
+/// Reduces PyO3 FFI round-trips for large APKs (`apex inspect` hot path).
+#[pyfunction]
+fn read_entries_batch(py: Python<'_>, apk_path: &str) -> PyResult<Py<PyAny>> {
+    let mut archive = open_archive(apk_path).map_err(PyErr::from)?;
+    let cap = archive.len();
+    let mut names: Vec<String> = Vec::with_capacity(cap);
+    let mut sanitized_names: Vec<Option<String>> = Vec::with_capacity(cap);
+    let mut verdicts: Vec<String> = Vec::with_capacity(cap);
+    let mut reasons: Vec<Option<String>> = Vec::with_capacity(cap);
+    let mut compressed_sizes: Vec<u64> = Vec::with_capacity(cap);
+    let mut uncompressed_sizes: Vec<u64> = Vec::with_capacity(cap);
+    let mut crc32s: Vec<u32> = Vec::with_capacity(cap);
+    let mut running_total: u64 = 0;
+    let mut cap_breached = false;
+
+    for i in 0..archive.len() {
+        let zfile = archive
+            .by_index_raw(i)
+            .map_err(ApexZipError::from)
+            .map_err(PyErr::from)?;
+        let raw_name = zfile.name().to_string();
+        let mut info = EntryInfo::from_raw(
+            &raw_name,
+            zfile.compressed_size(),
+            zfile.size(),
+            zfile.crc32(),
+        );
+
+        if info.verdict == "CLEAN" {
+            running_total = running_total.saturating_add(zfile.size());
+            if running_total > sanitize::MAX_TOTAL_UNCOMPRESSED {
+                cap_breached = true;
+            }
+            if cap_breached {
+                info.verdict = "WARN";
+                info.sanitized_name = None;
+                info.reason = Some("cumulative uncompressed size exceeds archive cap".to_string());
+            }
+        }
+
+        names.push(info.raw_name.clone());
+        sanitized_names.push(info.sanitized_name.clone());
+        verdicts.push(info.verdict.to_string());
+        reasons.push(info.reason.clone());
+        compressed_sizes.push(info.compressed_size);
+        uncompressed_sizes.push(info.uncompressed_size);
+        crc32s.push(info.crc32);
+    }
+
+    let batch = PyDict::new(py);
+    batch.set_item("name", names)?;
+    batch.set_item("sanitized_name", sanitized_names)?;
+    batch.set_item("verdict", verdicts)?;
+    batch.set_item("reason", reasons)?;
+    batch.set_item("compressed_size", compressed_sizes)?;
+    batch.set_item("uncompressed_size", uncompressed_sizes)?;
+    batch.set_item("crc32", crc32s)?;
+    batch.set_item("count", cap)?;
+    Ok(batch.into_any().unbind())
+}
+
 /// Extract a ZIP/APK to `dest_dir`, sanitizing every entry name and
 /// refusing (not extracting, not renaming) any entry that fails
 /// path-traversal, absolute-path, or size-bound checks. Returns a report
@@ -194,6 +256,7 @@ fn extract_apk(py: Python<'_>, apk_path: &str, dest_dir: &str) -> PyResult<Py<Py
 #[pymodule]
 fn apex_zip_reader(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(read_entries, m)?)?;
+    m.add_function(wrap_pyfunction!(read_entries_batch, m)?)?;
     m.add_function(wrap_pyfunction!(extract_apk, m)?)?;
     Ok(())
 }

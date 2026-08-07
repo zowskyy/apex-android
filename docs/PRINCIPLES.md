@@ -138,7 +138,7 @@ Rules:
 
 - No orphan modules that nothing imports or calls
 - CLI and web share the same service layer — no duplicated business logic
-- API endpoints return real data, never mocks or permanent placeholders
+- API endpoints return real data, never mocks or permanent stub responses
 - Errors propagate with actionable messages at every layer
 - At least one test exercises the same path a user would take
 
@@ -159,7 +159,7 @@ APEX is built to compete on merit in public. That means:
 - UI is polished: no truncated hashes, broken layout, or unexplained empty panels
 - Security findings are evidence-based; signing claims state what crypto proves
 - Third-party licenses and bundled data provenance are documented
-- Known limitations are stated plainly — never hidden as "coming soon"
+- Known limitations are stated plainly — never hidden behind vague future promises
 
 Before declaring a release ready, run the checklist in
 `finished-product-delivery` (`.cursor/skills/finished-product-delivery/SKILL.md`).

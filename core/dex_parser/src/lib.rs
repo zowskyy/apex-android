@@ -35,6 +35,7 @@ pub mod metadata;
 pub mod opcode;
 pub mod proto;
 pub mod reader;
+pub mod ssa;
 pub mod strings;
 
 use error::Result;

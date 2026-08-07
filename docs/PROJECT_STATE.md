@@ -76,11 +76,11 @@ Tasks 1–11 applied for zero-findings hygiene:
   indices. All three fixed here, plus the instruction decoder (below) was
   built from scratch rather than salvaging that project's disassembler,
   which only covered ~2 of ~30 real Dalvik instruction formats. Also NOT
-  ported: that project's "SSA" builder (predecessor tracking was never
-  wired up, so phi-node insertion was dead code) and its optimizer/AST/
-  pretty-printer (every stage was a stub that discarded its input) — those
-  remain scaffolding for the real Slice 1.7 work still ahead (IR → Java
-  emitter, now that both instructions and CFG are real).
+  ported: that project's "SSA" builder (predecessor tracking was never wired up,
+  so phi-node insertion was dead code) and its optimizer/AST/pretty-printer
+  (every stage discarded its input). **Slice 1.6** ships real CFG + SSA phi
+  insertion in `core/dex_parser::ssa`. **Slice 1.7 (IR → Java emitter) is
+  post-release** — deferred until after v0.5 public release.
   **Known gap in the opcode table**: the 0xe3-0xf9 quickened/ODEX-only
   range (iget-quick/invoke-virtual-quick/etc.) has width-correct but
   semantically-approximate format assignments — those opcodes never appear
@@ -120,7 +120,7 @@ application workflows.
 - None.
 
 ## Known Gaps / Follow-ups
-- **Slice 0.1 (Cargo workspace scaffold) was never done as its own slice** —
+- **Slice 0.1 (Cargo workspace bootstrap) was folded into slice 1.1** —
   the workspace was created as part of 1.1 instead. No functional gap, just
   noting the renumbering for the record.
 - **Slice 1.1 performance finding (do not treat 10x as proven yet):**

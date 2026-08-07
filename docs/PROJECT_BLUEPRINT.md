@@ -103,7 +103,7 @@ apex/
 
 ### Phase 0: Foundation (Slices 0.1–0.4)
 ```
-0.1  Project scaffold — Cargo workspace + Python package + PyO3 bridge
+0.1  Project bootstrap — Cargo workspace + Python package + PyO3 bridge
 0.2  CI/CD — GitHub Actions: Rust tests + Python tests + cross-compile
 0.3  Port apktool_diagnostics.py into the project as the diagnostics module
 0.4  CLI entry point — `apex --help` with subcommand routing
