@@ -24,3 +24,6 @@ wrappers/macos/dist/
 .coverage
 release-staging/
 .version-sync.lock
+.env
+.cursor/gate-logs/
+.cursor/gate-cache/
