@@ -1,6 +1,6 @@
 ---
 name: universal-arc-engine
-description: Product-agnostic audit skill for any subject. Activates on review, audit, check, assess, pre-launch, pre-mortem, quality gate. First-principles structural integrity, failure economics, dependency risk, lifecycle viability. Every finding includes Cost-of-Fix delta.
+description: Product-agnostic audit skill for any subject. Activates on review, audit, check, assess, pre-launch, pre-mortem, quality gate. First-principles structural integrity, failure economics, dependency risk, lifecycle viability. Every finding includes Cost-of-Fix delta. Enforces Iterative Zero-Findings Protocol.
 triggers: ["audit", "review", "check", "assess", "pre-launch", "pre-mortem", "quality gate", "ARC", "Run ARC"]
 scope: global — applies to any subject without modification
 ---
@@ -12,6 +12,26 @@ You audit **structural integrity, failure economics, dependency risk, and lifecy
 Every finding must include a **Cost-of-Fix (CoF)** delta: fixing now vs after integration/deployment.
 
 Pair with `system-architect-audit` for software release factories; ARC is the universal layer above it.
+
+APEX code-audit design (PCB→code phase map, JSON schemas, harness):
+`docs/ARC_CODE_AUDIT_DESIGN.md`. Feedback loop: `.cursor/FEEDBACK_PROTOCOL.md`.
+Harness manifest: `.cursor/audit_input.yaml`.
+
+---
+
+## CRITICAL RULE: THE ITERATIVE ZERO-FINDINGS PROTOCOL
+
+After you deliver an audit report with findings, the user will provide updated
+files/subjects. You MUST re-run the full 8-phase audit on the updated version.
+Repeat this cycle until the audit yields **ZERO findings** across all severity
+levels. Only then state: **"ARC: CLEAN – Zero Findings."**
+
+Operational limits (see `.cursor/FEEDBACK_PROTOCOL.md`):
+
+- `MAX_AUDIT_ITERATIONS = 3` (initial + up to 3 re-triggers)
+- No auto-pass to CLEAN while findings remain
+- At iteration 3 with findings left → manual sign-off; keep `requires-rework`
+- Fixed finding that reappears → escalate to **[SHOW-STOPPER]** (regression)
 
 ---
 
@@ -29,7 +49,8 @@ Do not proceed without mapping the subject onto these three pillars.
 
 ## EXECUTION PROTOCOL (8 Phases)
 
-Apply mutatis mutandis to the user's domain.
+Apply mutatis mutandis to the user's domain. PCB→code mapping is in
+`docs/ARC_CODE_AUDIT_DESIGN.md` §3.
 
 | Phase | Focus |
 |-------|--------|
@@ -61,6 +82,7 @@ Apply mutatis mutandis to the user's domain.
 - "What if X?" → ripple across all 8 phases.
 - Translate phase jargon to domain (code: vias = calls; org: planes = departments).
 - **Do not** write code or final deliverables unless explicitly asked — audit, criticize, mitigate.
+- On `@cursor Run ARC`, read `.cursor/audit_input.yaml`, follow Zero-Findings re-audit loop.
 
 ---
 
@@ -90,5 +112,5 @@ When audit/review is **complete** and countermeasures are verified:
 1. Golden Triad confirmed
 2. All 8 phases documented with severity labels + CoF
 3. Countermeasures implemented or explicitly deferred with ticket
-4. Re-verify after fixes
+4. Re-verify after fixes (Iterative Zero-Findings until CLEAN or max iterations)
 5. Terminal demo video recorded and attached to review

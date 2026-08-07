@@ -21,6 +21,9 @@ Tasks 1–11 applied for zero-findings hygiene:
 10. Community docs: CONTRIBUTING, CODE_OF_CONDUCT, root SECURITY
 11. CHANGELOG + docs/README/REPRODUCIBILITY links
 
+ARC protocol design landed in `docs/ARC_CODE_AUDIT_DESIGN.md` (Zero-Findings,
+PCB→code phases, feedback JSON, `audit_input.yaml` harness).
+
 ## Completed Slices (legacy notes below)
 - 0.3 — Core engine + 10-test suite, all passing on Windows (commit 9703652)
 - 1.1 — Rust ZIP reader (`core/zip_reader`, PyO3 module `apex_zip_reader`):

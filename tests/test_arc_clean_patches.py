@@ -49,6 +49,23 @@ def test_dockerfile_pins_digest_and_non_root() -> None:
     assert "USER apex" in text
 
 
+def test_arc_design_and_harness_manifest() -> None:
+    design = ROOT / "docs" / "ARC_CODE_AUDIT_DESIGN.md"
+    assert design.is_file()
+    text = design.read_text(encoding="utf-8")
+    assert "Iterative Zero" in text or "ZERO findings" in text
+    assert "Phase 0" in text and "Phase 7" in text
+    assert "[SHOW-STOPPER]" in text
+    feedback = ROOT / ".cursor" / "FEEDBACK_PROTOCOL.md"
+    assert feedback.is_file()
+    assert "MAX_AUDIT_ITERATIONS" in feedback.read_text(encoding="utf-8")
+    manifest = ROOT / ".cursor" / "audit_input.yaml"
+    assert manifest.is_file()
+    body = manifest.read_text(encoding="utf-8")
+    assert "critical_paths" in body
+    assert "max_audit_iterations" in body
+
+
 def test_build_sh_supports_verbose() -> None:
     text = (ROOT / "build.sh").read_text(encoding="utf-8")
     assert "--verbose" in text
